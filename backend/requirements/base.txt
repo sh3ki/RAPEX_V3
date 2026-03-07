@@ -17,7 +17,7 @@ daphne==4.1.0
 
 # ── Celery ────────────────────────────────────────
 celery==5.4.0
-django-celery-beat==2.6.0
+django-celery-beat==2.7.0
 
 # ── Filtering + CORS ─────────────────────────────
 django-filter==24.3
