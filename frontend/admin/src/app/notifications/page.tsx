@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
-import Sidebar from '@/components/Sidebar';
+import DashboardLayout from '@/components/DashboardLayout';
 import DataTable from '@/components/DataTable';
 import StatusBadge from '@/components/StatusBadge';
 import api from '@/lib/api';
@@ -57,13 +57,11 @@ export default function NotificationsPage() {
   ];
 
   return (
-    <div className="flex min-h-screen">
-      <Sidebar />
-      <main className="flex-1 lg:ml-64 p-6">
+    <DashboardLayout>
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h1 className="text-2xl font-bold text-white">Notifications</h1>
-            <p className="text-dark-muted text-sm mt-1">Notification log & broadcast messaging</p>
+            <h1 className="text-2xl font-bold text-gray-900">Notifications</h1>
+            <p className="text-gray-500 text-sm mt-1">Notification log & broadcast messaging</p>
           </div>
           <button className="btn-primary flex items-center gap-2" onClick={() => setShowBroadcast(true)}>
             <Send size={16} /> Broadcast
@@ -85,15 +83,15 @@ export default function NotificationsPage() {
             <div className="card w-full max-w-lg">
               <div className="flex items-center gap-2 mb-4">
                 <Bell size={20} className="text-primary" />
-                <h3 className="text-lg font-semibold text-white">Broadcast Notification</h3>
+                <h3 className="text-lg font-semibold text-gray-900">Broadcast Notification</h3>
               </div>
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm text-dark-muted mb-1">Title</label>
+                  <label className="block text-sm text-gray-500 mb-1">Title</label>
                   <input className="input" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Announcement title" />
                 </div>
                 <div>
-                  <label className="block text-sm text-dark-muted mb-1">Message</label>
+                  <label className="block text-sm text-gray-500 mb-1">Message</label>
                   <textarea
                     className="input h-24 resize-none"
                     value={body}
@@ -102,10 +100,10 @@ export default function NotificationsPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm text-dark-muted mb-2">Target Roles</label>
+                  <label className="block text-sm text-gray-500 mb-2">Target Roles</label>
                   <div className="flex gap-3">
                     {['USER', 'MERCHANT', 'RIDER'].map((role) => (
-                      <label key={role} className="flex items-center gap-2 text-sm text-dark-text cursor-pointer">
+                      <label key={role} className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
                         <input
                           type="checkbox"
                           checked={roles.includes(role)}
@@ -133,7 +131,6 @@ export default function NotificationsPage() {
             </div>
           </div>
         )}
-      </main>
-    </div>
+    </DashboardLayout>
   );
 }
