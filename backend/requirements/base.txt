@@ -1,0 +1,49 @@
+# ── Django Core ────────────────────────────────────
+Django==5.1.2
+djangorestframework==3.15.2
+djangorestframework-simplejwt==5.3.1
+
+# ── Database ──────────────────────────────────────
+psycopg2-binary==2.9.9
+
+# ── Redis + Cache ─────────────────────────────────
+redis==5.0.8
+django-redis==5.4.0
+
+# ── Channels (WebSocket) ─────────────────────────
+channels==4.0.0
+channels-redis==4.2.0
+daphne==4.1.0
+
+# ── Celery ────────────────────────────────────────
+celery==5.4.0
+django-celery-beat==2.6.0
+
+# ── Filtering + CORS ─────────────────────────────
+django-filter==24.3
+django-cors-headers==4.4.0
+
+# ── Storage (S3-compatible / MinIO) ──────────────
+boto3==1.35.14
+django-storages==1.14.4
+
+# ── Image Handling ────────────────────────────────
+Pillow==10.4.0
+
+# ── Firebase (Push Notifications) ─────────────────
+firebase-admin==6.5.0
+
+# ── HTTP Requests (Semaphore SMS, OneSignal) ──────
+requests==2.32.3
+
+# ── Environment Variables ─────────────────────────
+python-decouple==3.8
+
+# ── PDF Reports ───────────────────────────────────
+reportlab==4.2.2
+
+# ── QR Codes ──────────────────────────────────────
+qrcode[pil]==7.4.2
+
+# ── ASGI Server ───────────────────────────────────
+uvicorn[standard]==0.30.6
