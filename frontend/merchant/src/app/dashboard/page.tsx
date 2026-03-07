@@ -1,7 +1,7 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import Sidebar from '@/components/Sidebar';
+import DashboardLayout from '@/components/DashboardLayout';
 import StatCard from '@/components/StatCard';
 import StatusBadge from '@/components/StatusBadge';
 import api from '@/lib/api';
@@ -33,63 +33,58 @@ export default function DashboardPage() {
   const totalRevenue = completedOrders.reduce((sum, o) => sum + Number(o.total_amount || 0), 0);
 
   return (
-    <div className="flex min-h-screen">
-      <Sidebar />
-      <main className="flex-1 lg:ml-64 p-6">
+    <DashboardLayout>
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold text-gray-900">Merchant Dashboard</h1>
+        <p className="text-sm text-gray-500 mt-1">Manage orders and your stores</p>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5 mb-8">
+        <StatCard title="Pending Orders" value={String(pendingOrders.length)} change="Needs action" trend="down" icon={Clock} color="primary" />
+        <StatCard title="Active Orders" value={String(activeOrders.length)} change="In progress" trend="up" icon={ShoppingCart} color="blue" />
+        <StatCard title="Completed" value={String(completedOrders.length)} change="+12%" trend="up" icon={ShoppingCart} color="green" />
+        <StatCard title="Revenue" value={`₱${totalRevenue.toLocaleString()}`} change="+8.5%" trend="up" icon={DollarSign} color="green" />
+      </div>
+
+      {pendingOrders.length > 0 && (
         <div className="mb-8">
-          <h1 className="text-2xl font-bold text-white">Merchant Dashboard</h1>
-          <p className="text-dark-muted text-sm mt-1">Manage orders and your stores</p>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 mb-8">
-          <StatCard label="Pending Orders" value={pendingOrders.length} icon={Clock} color="text-yellow-400" />
-          <StatCard label="Active Orders" value={activeOrders.length} icon={ShoppingCart} color="text-blue-400" />
-          <StatCard label="Completed" value={completedOrders.length} icon={ShoppingCart} color="text-green-400" />
-          <StatCard label="Revenue" value={`₱${totalRevenue.toLocaleString()}`} icon={DollarSign} color="text-green-400" />
-        </div>
-
-        {/* Pending Orders */}
-        {pendingOrders.length > 0 && (
-          <div className="mb-8">
-            <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-              <Clock size={20} className="text-yellow-400" /> Pending Orders
-            </h2>
-            <div className="grid gap-3">
-              {pendingOrders.slice(0, 5).map((o) => (
-                <div key={o.id} className="card flex items-center justify-between">
-                  <div>
-                    <p className="text-white font-medium">Order #{o.order_number}</p>
-                    <p className="text-dark-muted text-xs">{new Date(o.created_at).toLocaleString()}</p>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <span className="text-white font-semibold">₱{Number(o.total_amount).toLocaleString()}</span>
-                    <StatusBadge status={o.status} />
-                  </div>
+          <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+            <Clock size={20} className="text-amber-500" /> Pending Orders
+          </h2>
+          <div className="grid gap-3">
+            {pendingOrders.slice(0, 5).map((o) => (
+              <div key={o.id} className="card flex items-center justify-between">
+                <div>
+                  <p className="text-gray-900 font-medium">Order #{o.order_number}</p>
+                  <p className="text-gray-500 text-xs">{new Date(o.created_at).toLocaleString()}</p>
                 </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Stores */}
-        <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-          <Store size={20} className="text-primary" /> My Stores
-        </h2>
-        <div className="grid md:grid-cols-2 gap-4">
-          {stores.map((s: any) => (
-            <div key={s.id} className="card flex items-center justify-between">
-              <div>
-                <p className="text-white font-medium">{s.display_name}</p>
-                <p className="text-dark-muted text-xs">{s.store_type}</p>
+                <div className="flex items-center gap-3">
+                  <span className="text-gray-900 font-semibold">₱{Number(o.total_amount).toLocaleString()}</span>
+                  <StatusBadge status={o.status} />
+                </div>
               </div>
-              <StatusBadge status={s.is_open ? 'Open' : 'Closed'} />
-            </div>
-          ))}
-          {stores.length === 0 && (
-            <p className="text-dark-muted text-sm col-span-2">No stores yet. Create one from My Stores page.</p>
-          )}
+            ))}
+          </div>
         </div>
-      </main>
-    </div>
+      )}
+
+      <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+        <Store size={20} className="text-primary-500" /> My Stores
+      </h2>
+      <div className="grid md:grid-cols-2 gap-4">
+        {stores.map((s: any) => (
+          <div key={s.id} className="card flex items-center justify-between">
+            <div>
+              <p className="text-gray-900 font-medium">{s.display_name}</p>
+              <p className="text-gray-500 text-xs">{s.store_type}</p>
+            </div>
+            <StatusBadge status={s.is_open ? 'Open' : 'Closed'} />
+          </div>
+        ))}
+        {stores.length === 0 && (
+          <p className="text-gray-400 text-sm col-span-2">No stores yet. Create one from My Stores page.</p>
+        )}
+      </div>
+    </DashboardLayout>
   );
 }
