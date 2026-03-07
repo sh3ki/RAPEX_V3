@@ -1,1 +1,9 @@
-{}
+{
+  "/login/page": "app/login/page.js",
+  "/merchants/page": "app/merchants/page.js",
+  "/dashboard/page": "app/dashboard/page.js",
+  "/users/page": "app/users/page.js",
+  "/riders/page": "app/riders/page.js",
+  "/reports/page": "app/reports/page.js",
+  "/orders/page": "app/orders/page.js"
+}
