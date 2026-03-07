@@ -1,0 +1,87 @@
+RAPEX Merchant APP – Feature Breakdown
+(MVP Phase)
+Platform: Mobile App (Android only for MVP), Web Dashboard
+1. Merchant Registration & KYC
+Details:
+ Input personal & business details
+ Upload legal business documents (e.g. DTI, Mayor’s Permit)
+ Upload live selfie + valid ID (camera only, no gallery uploads)
+ Map-based business address input (Google Maps API integration)
+ Auto-approval system for basic verification, manual review for flagged entries
+(includes UI/UX, backend database, and Google Maps setup)
+2. Product Management System
+Details:
+ Add/Edit/Delete products
+ Upload product images
+ Set base price (markup auto-calculated by system)
+ Set inventory quantity (optional toggle)
+Special Logic:
+ Auto-apply markup:
+o ₱1–₱100 = +15%
+o ₱101–₱1,000 = +10%
+o ₱1,001+ = +05%
+ Rounded to nearest peso
+ Display to merchant: base price, markup %, final selling price
+(markup engine + real-time product control)
+3. Order Management System
+Details:
+ Receive orders with item breakdown
+ Accept/Reject within 3 minutes
+ If accepted:
+o Auto-ping nearby riders (2 km radius)
+o If no rider responds in 3 mins, manual assign option appears
+ Status updates: Pending → Preparing → For Pickup → Completed
+(includes backend logic, rider matching trigger, status tracking)
+4. Rider Matching & Wallet Visibility
+Details:
+ When a rider is assigned, merchant sees:
+o Rider’s name, contact, vehicle
+o Rider’s RAPEX Wallet balance (to ensure they can pay)
+ Merchant confirms product handoff via tap (“Picked Up”)
+(sync with rider module + wallet integration display)
+5. Order History & Sales Reports
+Details:
+ View past transactions
+ Filter by date, product, or user
+ Auto-categorized by Barangay & Municipality
+ Export to CSV or view in-app graphs
+ Track commissions deducted per order
+(backend analytics + visual dashboard)
+6. Receipt Generator (Portable Printer Ready) (optional)
+Details:
+ Auto-generate receipt after each transaction
+ Show: Order ID, Item List, Price, Date, Total, RAPEX Commission
+ Can be paired with portable Bluetooth receipt printers
+(thermal receipt format + Bluetooth printer compatibility)
+7. Chat Support with Admin
+Details:
+ Chat interface with RAPEX Admin for concerns
+ Upload image option for documents or issues
+ Predefined FAQs and canned replies for fast answers
+(minimal chat interface, no end-user-to-merchant chat here)
+8. Store Schedule & Availability Settings
+Details:
+ Merchant can set store open/close hours
+ App automatically hides their store when closed
+ Manual toggle for sudden "pause" (e.g. out of stock, emergencies)
+9. Promo/Discount Feature (Admin or Merchant-Initiated)
+Details:
+ Admin can set platform-wide discounts
+ Merchant can input custom discounts per product
+ Marked “Promo” in customer app
+10. Notification System (Push + In-App)
+Details:
+ Order updates
+ Rider assigned
+ Delivery completed
+ Admin alerts (uses Firebase Cloud Messaging for push notifications)
+11. Security & Login System
+Details:
+ Secure login with OTP via mobile number or email
+ Forgot password / Reset process
+ Device lock (can only log in on one device at a time)
+12. App UI/UX Design
+Details:
+ Clean, simple design for first-time merchants
+ Use of Taglish for instructions
+ Icons for fast actions (Accept, Ready, etc.)S (UI/UX + branding templates)
