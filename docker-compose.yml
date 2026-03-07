@@ -59,6 +59,8 @@ services:
     build: ./backend
     command: >
       sh -c "python manage.py migrate --noinput &&
+             python manage.py load_initial_settings &&
+             python manage.py seed &&
              gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 4 --reload"
     volumes:
       - ./backend:/app
@@ -107,6 +109,82 @@ services:
         condition: service_healthy
       postgres:
         condition: service_healthy
+
+  # ─── Next.js Frontends ────────────────────────────
+  frontend-user:
+    build:
+      context: ./frontend/user
+      dockerfile: ../Dockerfile
+    command: npm run dev
+    volumes:
+      - ./frontend/user:/app
+      - /app/node_modules
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost/api/v1
+    ports:
+      - "3001:3001"
+    depends_on:
+      - backend
+
+  frontend-merchant:
+    build:
+      context: ./frontend/merchant
+      dockerfile: ../Dockerfile
+    command: npm run dev
+    volumes:
+      - ./frontend/merchant:/app
+      - /app/node_modules
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost/api/v1
+    ports:
+      - "3002:3002"
+    depends_on:
+      - backend
+
+  frontend-admin:
+    build:
+      context: ./frontend/admin
+      dockerfile: ../Dockerfile
+    command: npm run dev
+    volumes:
+      - ./frontend/admin:/app
+      - /app/node_modules
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost/api/v1
+    ports:
+      - "3003:3003"
+    depends_on:
+      - backend
+
+  frontend-superadmin:
+    build:
+      context: ./frontend/superadmin
+      dockerfile: ../Dockerfile
+    command: npm run dev
+    volumes:
+      - ./frontend/superadmin:/app
+      - /app/node_modules
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost/api/v1
+    ports:
+      - "3004:3004"
+    depends_on:
+      - backend
+
+  frontend-rider:
+    build:
+      context: ./frontend/rider
+      dockerfile: ../Dockerfile
+    command: npm run dev
+    volumes:
+      - ./frontend/rider:/app
+      - /app/node_modules
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost/api/v1
+    ports:
+      - "3005:3005"
+    depends_on:
+      - backend
 
   # ─── Nginx ────────────────────────────────────────
   nginx:
