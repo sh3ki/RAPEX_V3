@@ -1,0 +1,62 @@
+RAPEX RIDER APP – Feature Breakdown (MVP Phase)
+1. Rider Registration Module
+ Fields: Name, Age, Address, Birthday, Type of Vehicle, Valid ID Upload, Selfie Holding ID
+ Google Maps Integration for Address Pin
+ Admin Approval Workflow
+ OTP SMS Verification
+2. Rider Dashboard (Home Screen)
+ Summary of active orders
+ Wallet Balance Display
+ Daily/Weekly Earnings Tracker
+ Delivery Weekly Incentive Tracker (₱250 for 40 deliveries)
+3. Accept Orders + Order Management
+ Real-time incoming order requests
+ View item list, pickup address, and delivery drop-off
+ Accept/Reject Slide option
+ Order Timer (Auto-assigned after 3 mins)
+ Displays required wallet balance to accept the order
+4. Live Delivery Map (User Tracking)
+ Rider sees customer location
+ Google Maps real-time tracking
+ Cannot be turned off until transaction ends
+ Navigation directions to user
+ Map integration via Google Maps SDK
+5. RAPEX Wallet System
+ Admin loads ₱ 500 top-up
+ Riders pay merchants using wallet
+ Real-time deduction after each order
+ Admin commission auto-deducted after delivery
+ Notifications for wallet low balance
+ Penalty auto-deduction from next top-up (if not remitted)
+6. Transaction & History Logs
+ Filter by: Date, Status (Delivered, Cancelled), Earnings
+ View commission per transaction
+ Summary by barangay/municipality
+ View remittance status
+7. Remittance Report System
+ System tells rider the amount they owe admin
+ Notification if remittance is due within 24 hours
+ Warning for late remittance
+ Auto-deduct from next top-up if not paid on time
+8. In-App Chat with Admin + GCash Proof Upload
+ Rider chats directly with Admin for top-up
+ Upload screenshot of GCash payment
+ Admin confirms and loads wallet
+ Secure message thread saved per rider
+9. Notifications System
+ New order alert
+ Wallet low balance alert
+ Remittance alerts
+ Incentive progress updates
+ Push notifications
+10. Rider Referral System
+ QR Code generation for referral
+ When referral registers, 2 points are credited
+ Max 100 points/month
+ Points credited to wallet
+ Admin can track referral activity
+11. Security & Verification
+ Enforced selfie ID during registration
+ Prevent spoofing with camera-only (no gallery upload)
+ Location access required to use app
+ Background check verification flag (manual via Admin Panel)
