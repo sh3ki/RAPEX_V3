@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import Sidebar from '@/components/Sidebar';
+import DashboardLayout from '@/components/DashboardLayout';
 import DataTable from '@/components/DataTable';
 import StatusBadge from '@/components/StatusBadge';
 import api from '@/lib/api';
@@ -37,12 +37,10 @@ export default function ReferralsPage() {
   ];
 
   return (
-    <div className="flex min-h-screen">
-      <Sidebar />
-      <main className="flex-1 lg:ml-64 p-6">
+    <DashboardLayout>
         <div className="mb-6">
-          <h1 className="text-2xl font-bold text-white">Referrals</h1>
-          <p className="text-dark-muted text-sm mt-1">User and rider referral tracking</p>
+          <h1 className="text-2xl font-bold text-gray-900">Referrals</h1>
+          <p className="text-gray-500 text-sm mt-1">User and rider referral tracking</p>
         </div>
 
         <div className="flex gap-2 mb-6">
@@ -53,7 +51,7 @@ export default function ReferralsPage() {
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                 activeTab === tab
                   ? 'bg-primary text-white'
-                  : 'bg-dark-surface text-dark-muted hover:text-white border border-dark-border'
+                  : 'bg-white text-gray-500 hover:text-gray-900 border border-gray-200'
               }`}
             >
               {tab === 'users' ? 'User Referrals' : 'Rider Referrals'}
@@ -67,7 +65,6 @@ export default function ReferralsPage() {
         {activeTab === 'riders' && (
           <DataTable columns={columns} data={riderRefs} page={1} totalPages={1} onPageChange={() => {}} isLoading={loadingRiders} />
         )}
-      </main>
-    </div>
+    </DashboardLayout>
   );
 }
