@@ -1,0 +1,96 @@
+RAPEX USER APP – Feature Breakdown (MVP Phase)
+1. Dashboard Overview
+ Features: Real-time summary of orders, users, riders, merchants, wallet balances, and top locations.
+ Functions:
+o Live order activity (Pending, Ongoing, Completed)
+o Revenue summary
+o Rider performance
+o Daily/weekly transactions
+2. User Management
+ Features:
+o View, verify, or ban users
+o Access ID photos, registration info, address
+o Check referral points and wallet balance
+ Functions:
+o Manual approval or suspension
+o Assign reward points
+3. Merchant Management
+ Features:
+o Approve merchant registration with business document review
+o View store details, type, products, and markups
+o Suspend or edit merchant status
+ Functions:
+o Modify or override markup for promotions
+o View compliance per barangay
+4. Rider Management
+ Features:
+o Approve riders with ID and vehicle info
+o See live wallet balance
+o Monitor deliveries and remittances
+ Functions:
+o Block riders
+o View weekly completed deliveries and incentive qualification
+5. Wallet Dashboard
+ Features:
+o Track all wallet top-ups, deductions, and balances
+o Filter by rider, date, or transaction
+ Functions:
+o Manual adjustment
+o Notification when top-up is short (auto-deduct unpaid amount)
+6. Commission Settings (Markup Engine)
+ Features:
+o Tiered commission rules (₱1–100: 20%, ₱101–1,000: 15%, ₱1001+: 10%)
+o Override by season or manually per merchant
+o Rapex fee 10%
+Rapex fee commission: will base on the total commission of the placed order)
+ Functions:
+o Show markup logs per transaction
+7. Transaction Monitoring
+ Features:
+o Real-time view of orders by location (Barangay, Municipality)
+o Logs of product price, delivery fee, cash-on-hand, and commissions
+ Functions:
+o Export transaction history
+o Tag suspicious transactions
+8. Reports & Analytics
+ Features:
+o Exportable reports (daily, weekly, monthly)
+o Rider ranking
+o Merchant sales performance
+ Functions:
+o Downloadable CSV or PDF
+9. Top-Up Request Chat Panel
+ Features:
+o In-app chat between admin and rider for wallet top-up requests
+o Upload screenshot (e.g., G Cash)
+ Functions:
+o Approve and auto-update wallet after screenshot verification
+10. Notifications & Alerts System
+ Features:
+o Notify riders of remittance deadlines
+o Alert admins on failed delivery, unassigned riders, and inactive accounts
+ Functions:
+o SMS or in-app notification control panel
+ Estimated Cost: ₱15,000
+11. Referral Management
+ Features:
+o View referral code usage (user and rider)
+o Monitor referral points (max 100/month/user)
+ Functions:
+o Adjust points manually if needed
+ Estimated Cost: ₱10,000
+12. System Settings
+ Features:
+o Control global settings (location radius, markup %, incentives)
+o User roles: Super Admin, Support, Finance, Logistics, etc.
+ Functions:
+o Add/remove access to sensitive functions
+ Estimated Cost: ₱10,000
+13. Fraud & Risk Logs
+ Features:
+o Flagged transactions
+o Rider who failed to respond
+o Late remittance auto-deduct logs
+ Functions:
+o Exportable investigation reports
+ Estimated Cost: ₱10,000
