@@ -1,0 +1,97 @@
+'use client';
+import { useQuery } from '@tanstack/react-query';
+import api from '@/lib/api';
+import { useState, useEffect } from 'react';
+import { MapPin, Store, Search, ChevronRight } from 'lucide-react';
+import Link from 'next/link';
+
+const storeTypes = ['ALL', 'SHOP', 'FRESH_MARKET', 'READY_TO_EAT', 'PRELOVED'] as const;
+const typeLabels: Record<string, string> = { SHOP: 'Shop', FRESH_MARKET: 'Fresh Market', READY_TO_EAT: 'Ready to Eat', PRELOVED: 'Preloved', ALL: 'All' };
+
+export default function HomePage() {
+  const [type, setType] = useState<string>('ALL');
+  const [search, setSearch] = useState('');
+  const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
+
+  useEffect(() => {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => setCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+        () => setCoords({ lat: 6.5244, lng: 3.3792 }) // Lagos default
+      );
+    } else { setCoords({ lat: 6.5244, lng: 3.3792 }); }
+  }, []);
+
+  const { data, isLoading } = useQuery({
+    queryKey: ['nearby-merchants', coords, type],
+    queryFn: async () => {
+      if (!coords) return [];
+      const params: Record<string, string | number> = { lat: coords.lat, lng: coords.lng, radius: 10 };
+      if (type !== 'ALL') params.type = type;
+      const { data } = await api.get('/user/merchants/', { params });
+      return data?.results || data || [];
+    },
+    enabled: !!coords,
+  });
+
+  const stores = (data || []).filter((s: any) =>
+    !search || s.name?.toLowerCase().includes(search.toLowerCase())
+  );
+
+  return (
+    <div className="p-4 space-y-4">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-xl font-bold">RAPEX</h1>
+          <div className="flex items-center gap-1 text-dark-muted text-xs mt-0.5">
+            <MapPin size={12} />
+            <span>{coords ? `${coords.lat.toFixed(2)}, ${coords.lng.toFixed(2)}` : 'Locating…'}</span>
+          </div>
+        </div>
+        <Link href="/referral" className="text-primary-500 text-xs font-medium border border-primary-500 rounded-full px-3 py-1">Refer & Earn</Link>
+      </div>
+
+      {/* Search */}
+      <div className="relative">
+        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-dark-muted" />
+        <input className="input pl-9" placeholder="Search stores…" value={search} onChange={e => setSearch(e.target.value)} />
+      </div>
+
+      {/* Type tabs */}
+      <div className="flex gap-2 overflow-x-auto no-scrollbar">
+        {storeTypes.map(t => (
+          <button key={t} onClick={() => setType(t)} className={`whitespace-nowrap text-xs font-medium px-3 py-1.5 rounded-full transition-colors ${type === t ? 'bg-primary-500 text-white' : 'bg-dark-surface text-dark-muted border border-dark-border'}`}>
+            {typeLabels[t]}
+          </button>
+        ))}
+      </div>
+
+      {/* Store list */}
+      {isLoading ? (
+        <div className="space-y-3">{[1,2,3].map(i => <div key={i} className="card animate-pulse h-20" />)}</div>
+      ) : stores.length === 0 ? (
+        <div className="text-center py-12 text-dark-muted">
+          <Store size={48} className="mx-auto mb-3 opacity-50" />
+          <p>No stores found nearby</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {stores.map((s: any) => (
+            <Link key={s.id} href={`/stores/${s.id}`} className="card flex items-center gap-4 hover:border-primary-500/50 transition-colors">
+              <div className="w-14 h-14 rounded-xl bg-primary-500/10 flex items-center justify-center flex-shrink-0">
+                <Store size={24} className="text-primary-500" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 className="font-semibold text-sm truncate">{s.name}</h3>
+                <p className="text-xs text-dark-muted truncate">{s.address || typeLabels[s.store_type] || s.store_type}</p>
+                <span className={`text-[10px] ${s.is_open ? 'text-green-400' : 'text-red-400'}`}>{s.is_open ? 'Open' : 'Closed'}</span>
+              </div>
+              <ChevronRight size={16} className="text-dark-muted flex-shrink-0" />
+            </Link>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
