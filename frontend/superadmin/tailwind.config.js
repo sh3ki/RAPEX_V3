@@ -1,15 +1,26 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
   content: ['./src/**/*.{js,ts,jsx,tsx,mdx}'],
-  darkMode: 'class',
   theme: {
     extend: {
       colors: {
-        primary: { DEFAULT: '#FF6B00', 50: '#FFF3E6', 100: '#FFE0B3', 500: '#FF6B00', 600: '#E55E00', 700: '#CC5200' },
-        secondary: { DEFAULT: '#7C3AED', 50: '#F3EEFF', 500: '#7C3AED', 600: '#6D28D9' },
-        dark: { bg: '#0F172A', surface: '#1E293B', border: '#334155', text: '#E2E8F0', muted: '#94A3B8' },
+        primary: {
+          50: '#FFF7ED',
+          100: '#FFEDD5',
+          200: '#FED7AA',
+          300: '#FDBA74',
+          400: '#FB923C',
+          500: '#F97316',
+          600: '#EA580C',
+          700: '#C2410C',
+          800: '#9A3412',
+          900: '#7C2D12',
+          DEFAULT: '#F97316',
+        },
       },
-      fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] },
+      fontFamily: {
+        sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
+      },
     },
   },
   plugins: [],
