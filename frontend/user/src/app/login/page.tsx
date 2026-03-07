@@ -7,7 +7,7 @@ import Link from 'next/link';
 export default function LoginPage() {
   const { login } = useAuthStore();
   const router = useRouter();
-  const [phone, setPhone] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -15,8 +15,8 @@ export default function LoginPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true); setError('');
-    try { await login(phone, password); router.push('/'); }
-    catch { setError('Invalid phone number or password'); }
+    try { await login(email, password); router.push('/'); }
+    catch { setError('Invalid email or password'); }
     finally { setLoading(false); }
   };
 
@@ -30,8 +30,8 @@ export default function LoginPage() {
         <form onSubmit={handleSubmit} className="space-y-4">
           {error && <div className="bg-red-500/10 border border-red-500/30 text-red-400 rounded-lg px-4 py-2 text-sm">{error}</div>}
           <div>
-            <label className="text-xs text-dark-muted mb-1 block">Phone Number</label>
-            <input className="input" placeholder="08012345678" value={phone} onChange={e => setPhone(e.target.value)} required />
+            <label className="text-xs text-dark-muted mb-1 block">Email Address</label>
+            <input className="input" type="email" placeholder="user@rapex.ph" value={email} onChange={e => setEmail(e.target.value)} required />
           </div>
           <div>
             <label className="text-xs text-dark-muted mb-1 block">Password</label>
