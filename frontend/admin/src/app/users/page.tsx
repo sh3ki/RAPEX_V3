@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import Sidebar from '@/components/Sidebar';
+import DashboardLayout from '@/components/DashboardLayout';
 import DataTable from '@/components/DataTable';
 import StatusBadge from '@/components/StatusBadge';
 import api from '@/lib/api';
@@ -69,19 +69,17 @@ export default function UsersPage() {
   ];
 
   return (
-    <div className="flex min-h-screen">
-      <Sidebar />
-      <main className="flex-1 lg:ml-64 p-6">
+    <DashboardLayout>
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h1 className="text-2xl font-bold text-white">User Management</h1>
-            <p className="text-dark-muted text-sm mt-1">View and manage user accounts & KYC</p>
+            <h1 className="text-2xl font-bold text-gray-900">User Management</h1>
+            <p className="text-gray-500 text-sm mt-1">View and manage user accounts & KYC</p>
           </div>
         </div>
 
         {/* Search */}
         <div className="relative mb-6 max-w-md">
-          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-dark-muted" />
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
           <input
             type="text"
             className="input pl-10"
@@ -99,7 +97,6 @@ export default function UsersPage() {
           onPageChange={() => {}}
           isLoading={isLoading}
         />
-      </main>
-    </div>
+    </DashboardLayout>
   );
 }
