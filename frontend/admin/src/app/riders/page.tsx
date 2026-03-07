@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import Sidebar from '@/components/Sidebar';
+import DashboardLayout from '@/components/DashboardLayout';
 import DataTable from '@/components/DataTable';
 import StatusBadge from '@/components/StatusBadge';
 import api from '@/lib/api';
@@ -104,16 +104,14 @@ export default function RidersPage() {
   ];
 
   return (
-    <div className="flex min-h-screen">
-      <Sidebar />
-      <main className="flex-1 lg:ml-64 p-6">
+    <DashboardLayout>
         <div className="mb-6">
-          <h1 className="text-2xl font-bold text-white">Rider Management</h1>
-          <p className="text-dark-muted text-sm mt-1">Manage rider accounts, KYC, wallet, and incentives</p>
+          <h1 className="text-2xl font-bold text-gray-900">Rider Management</h1>
+          <p className="text-gray-500 text-sm mt-1">Manage rider accounts, KYC, wallet, and incentives</p>
         </div>
 
         <div className="relative mb-6 max-w-md">
-          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-dark-muted" />
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
           <input
             type="text"
             className="input pl-10"
@@ -136,7 +134,7 @@ export default function RidersPage() {
         {walletModal && (
           <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
             <div className="card w-full max-w-sm">
-              <h3 className="text-lg font-semibold text-white mb-4">Load Rider Wallet</h3>
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Load Rider Wallet</h3>
               <input
                 type="number"
                 className="input mb-4"
@@ -159,7 +157,6 @@ export default function RidersPage() {
             </div>
           </div>
         )}
-      </main>
-    </div>
+    </DashboardLayout>
   );
 }
