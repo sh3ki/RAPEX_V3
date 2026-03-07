@@ -1,0 +1,42 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --primary: #FF6B00;
+  --secondary: #7C3AED;
+  --bg: #0F172A;
+  --surface: #1E293B;
+  --border: #334155;
+  --text: #E2E8F0;
+  --muted: #94A3B8;
+}
+
+body {
+  @apply bg-dark-bg text-dark-text antialiased;
+}
+
+/* Apex Dashboard scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+
+@layer components {
+  .card {
+    @apply bg-dark-surface border border-dark-border rounded-xl p-6;
+  }
+  .input {
+    @apply bg-dark-bg border border-dark-border rounded-lg px-4 py-2 text-dark-text placeholder-dark-muted focus:border-primary-500 focus:ring-1 focus:ring-primary-500 outline-none transition-colors w-full;
+  }
+  .btn-primary {
+    @apply bg-primary-500 hover:bg-primary-600 text-white font-semibold px-4 py-2 rounded-lg transition-colors;
+  }
+  .btn-secondary {
+    @apply bg-dark-surface hover:bg-dark-border text-dark-text border border-dark-border px-4 py-2 rounded-lg transition-colors;
+  }
+  .badge-green { @apply bg-green-500/20 text-green-400 text-xs font-medium px-2 py-0.5 rounded-full; }
+  .badge-yellow { @apply bg-yellow-500/20 text-yellow-400 text-xs font-medium px-2 py-0.5 rounded-full; }
+  .badge-red { @apply bg-red-500/20 text-red-400 text-xs font-medium px-2 py-0.5 rounded-full; }
+  .badge-blue { @apply bg-blue-500/20 text-blue-400 text-xs font-medium px-2 py-0.5 rounded-full; }
+}
