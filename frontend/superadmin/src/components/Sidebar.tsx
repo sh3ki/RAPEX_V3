@@ -1,64 +1,102 @@
 'use client';
+
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuthStore } from '@/store/authStore';
 import {
-  LayoutDashboard, Users, Shield, Settings, Wallet,
-  FileText, AlertTriangle, LogOut
+  LayoutDashboard, Users, Settings, Wallet,
+  AlertTriangle, FileText, LogOut, ChevronLeft, ChevronRight,
 } from 'lucide-react';
-import { clsx } from 'clsx';
+import { useState } from 'react';
 
-const navItems = [
-  { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { href: '/admins', label: 'Admin Accounts', icon: Users },
-  { href: '/settings', label: 'Platform Settings', icon: Settings },
-  { href: '/wallet-ledger', label: 'Wallet Ledger', icon: Wallet },
-  { href: '/blacklist', label: 'Fraud & Blacklist', icon: AlertTriangle },
-  { href: '/audit-log', label: 'Audit Log', icon: FileText },
+const sections = [
+  {
+    title: 'OVERVIEW',
+    items: [
+      { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    ],
+  },
+  {
+    title: 'MANAGEMENT',
+    items: [
+      { href: '/admins', label: 'Admin Accounts', icon: Users },
+      { href: '/settings', label: 'Platform Settings', icon: Settings },
+    ],
+  },
+  {
+    title: 'FINANCE',
+    items: [
+      { href: '/wallet-ledger', label: 'Wallet Ledger', icon: Wallet },
+    ],
+  },
+  {
+    title: 'SECURITY',
+    items: [
+      { href: '/blacklist', label: 'Fraud & Blacklist', icon: AlertTriangle },
+      { href: '/audit-log', label: 'Audit Log', icon: FileText },
+    ],
+  },
 ];
 
 export default function Sidebar() {
   const pathname = usePathname();
-  const { logout } = useAuthStore();
+  const { logout, user } = useAuthStore();
+  const [collapsed, setCollapsed] = useState(false);
 
   return (
-    <aside className="w-64 h-screen bg-dark-surface border-r border-dark-border flex flex-col fixed left-0 top-0">
-      {/* Logo */}
-      <div className="p-6 border-b border-dark-border">
-        <h1 className="text-xl font-bold">
-          <span className="text-primary">RAPEX</span>{' '}
-          <span className="text-dark-muted text-sm">SuperAdmin</span>
-        </h1>
+    <aside className={`h-screen bg-white border-r border-gray-200 flex flex-col fixed left-0 top-0 z-40 transition-all duration-300 ${collapsed ? 'w-[70px]' : 'w-[260px]'}`}>
+      <div className="flex items-center gap-3 px-5 py-5 border-b border-gray-100 relative">
+        <div className="w-9 h-9 rounded-xl bg-primary-500 flex items-center justify-center text-white font-bold text-lg flex-shrink-0">R</div>
+        {!collapsed && (
+          <div className="overflow-hidden">
+            <span className="text-lg font-bold text-gray-900">RAPEX</span>
+            <span className="block text-[11px] text-gray-400 font-medium tracking-wide">SUPERADMIN</span>
+          </div>
+        )}
+        <button onClick={() => setCollapsed(!collapsed)} className="absolute -right-3 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full bg-white border border-gray-200 shadow-sm flex items-center justify-center text-gray-400 hover:text-gray-600 transition-colors">
+          {collapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
+        </button>
       </div>
 
-      {/* Navigation */}
-      <nav className="flex-1 p-4 space-y-1">
-        {navItems.map(({ href, label, icon: Icon }) => (
-          <Link
-            key={href}
-            href={href}
-            className={clsx(
-              'flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm transition-colors',
-              pathname === href
-                ? 'bg-primary/10 text-primary'
-                : 'text-dark-muted hover:text-dark-text hover:bg-dark-bg'
-            )}
-          >
-            <Icon size={18} />
-            {label}
-          </Link>
+      <nav className="flex-1 overflow-y-auto py-4 px-3">
+        {sections.map((section) => (
+          <div key={section.title} className="mb-5">
+            {!collapsed && <p className="text-[11px] font-semibold text-gray-400 tracking-wider uppercase px-3 mb-2">{section.title}</p>}
+            <div className="space-y-0.5">
+              {section.items.map(({ href, label, icon: Icon }) => {
+                const active = pathname === href || pathname.startsWith(href + '/');
+                return (
+                  <Link key={href} href={href} title={collapsed ? label : undefined}
+                    className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-[13px] font-medium transition-all ${active ? 'bg-primary-50 text-primary-600' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'} ${collapsed ? 'justify-center' : ''}`}>
+                    <Icon size={18} className="flex-shrink-0" />
+                    {!collapsed && <span className="truncate">{label}</span>}
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
         ))}
       </nav>
 
-      {/* Logout */}
-      <div className="p-4 border-t border-dark-border">
-        <button
-          onClick={logout}
-          className="flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm text-dark-muted hover:text-red-400 w-full transition-colors"
-        >
-          <LogOut size={18} />
-          Logout
-        </button>
+      <div className="border-t border-gray-100 p-3">
+        {collapsed ? (
+          <button onClick={logout} title="Logout" className="w-full flex items-center justify-center p-2.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors">
+            <LogOut size={18} />
+          </button>
+        ) : (
+          <div className="flex items-center gap-3 px-2 py-2">
+            <div className="w-9 h-9 rounded-full bg-primary-100 flex items-center justify-center text-primary-600 font-bold text-sm flex-shrink-0">
+              {user?.email?.[0]?.toUpperCase() || 'S'}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-gray-900 truncate">{user?.email?.split('@')[0] || 'SuperAdmin'}</p>
+              <p className="text-[11px] text-gray-400">Super Admin</p>
+            </div>
+            <button onClick={logout} title="Logout" className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors">
+              <LogOut size={16} />
+            </button>
+          </div>
+        )}
       </div>
     </aside>
   );
