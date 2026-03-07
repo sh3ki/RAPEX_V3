@@ -1,7 +1,7 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import Sidebar from '@/components/Sidebar';
+import DashboardLayout from '@/components/DashboardLayout';
 import StatCard from '@/components/StatCard';
 import api from '@/lib/api';
 import {
@@ -36,86 +36,46 @@ export default function DashboardPage() {
     : 0;
 
   return (
-    <div className="flex min-h-screen">
-      <Sidebar />
-      <main className="flex-1 lg:ml-64 p-6">
-        <div className="mb-8">
-          <h1 className="text-2xl font-bold text-white">Admin Dashboard</h1>
-          <p className="text-dark-muted text-sm mt-1">Real-time platform overview</p>
-        </div>
+    <DashboardLayout>
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold text-gray-900">Admin Dashboard</h1>
+        <p className="text-sm text-gray-500 mt-1">Real-time platform overview</p>
+      </div>
 
-        {isLoading ? (
-          <div className="text-dark-muted text-center py-20">Loading dashboard...</div>
-        ) : (
-          <>
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 mb-8">
-              <StatCard
-                label="Revenue Today"
-                value={`₱${Number(data?.revenue_today || 0).toLocaleString()}`}
-                icon={DollarSign}
-                color="text-green-400"
-              />
-              <StatCard
-                label="Active Orders"
-                value={data?.active_orders ?? 0}
-                icon={ShoppingCart}
-                color="text-blue-400"
-              />
-              <StatCard
-                label="Active Riders"
-                value={data?.active_riders ?? 0}
-                icon={Bike}
-                color="text-purple-400"
-              />
-              <StatCard
-                label="Completed Today"
-                value={data?.completed_today ?? 0}
-                icon={CheckCircle}
-                color="text-green-400"
-              />
-            </div>
+      {isLoading ? (
+        <div className="text-gray-400 text-center py-20">Loading dashboard...</div>
+      ) : (
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5 mb-8">
+            <StatCard title="Revenue Today" value={`₱${Number(data?.revenue_today || 0).toLocaleString()}`} change="+12.5%" trend="up" icon={DollarSign} color="green" />
+            <StatCard title="Active Orders" value={String(data?.active_orders ?? 0)} change="+8.2%" trend="up" icon={ShoppingCart} color="blue" />
+            <StatCard title="Active Riders" value={String(data?.active_riders ?? 0)} change="+6.7%" trend="up" icon={Bike} color="purple" />
+            <StatCard title="Completed Today" value={String(data?.completed_today ?? 0)} change="+4.1%" trend="up" icon={CheckCircle} color="green" />
+          </div>
 
-            {/* Pending KYC Section */}
-            <h2 className="text-lg font-semibold text-white mb-4">Pending KYC Approvals</h2>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-              <StatCard
-                label="User KYC Pending"
-                value={data?.pending_kyc.users ?? 0}
-                icon={Users}
-                color="text-yellow-400"
-              />
-              <StatCard
-                label="Merchant KYC Pending"
-                value={data?.pending_kyc.merchants ?? 0}
-                icon={Store}
-                color="text-yellow-400"
-              />
-              <StatCard
-                label="Rider KYC Pending"
-                value={data?.pending_kyc.riders ?? 0}
-                icon={Bike}
-                color="text-yellow-400"
-              />
-            </div>
+          <h2 className="text-lg font-semibold text-gray-900 mb-4">Pending KYC Approvals</h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-8">
+            <StatCard title="User KYC Pending" value={String(data?.pending_kyc.users ?? 0)} change="Needs review" trend="down" icon={Users} color="primary" />
+            <StatCard title="Merchant KYC Pending" value={String(data?.pending_kyc.merchants ?? 0)} change="Needs review" trend="down" icon={Store} color="primary" />
+            <StatCard title="Rider KYC Pending" value={String(data?.pending_kyc.riders ?? 0)} change="Needs review" trend="down" icon={Bike} color="primary" />
+          </div>
 
-            {/* Quick Stats Bar */}
-            <div className="card">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Clock size={18} className="text-dark-muted" />
-                  <span className="text-sm text-dark-muted">Total Orders Today:</span>
-                  <span className="text-white font-semibold">{data?.total_orders_today ?? 0}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <AlertTriangle size={18} className="text-yellow-400" />
-                  <span className="text-sm text-dark-muted">Total Pending KYC:</span>
-                  <span className="text-yellow-400 font-semibold">{totalPendingKYC}</span>
-                </div>
+          <div className="card">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Clock size={18} className="text-gray-400" />
+                <span className="text-sm text-gray-500">Total Orders Today:</span>
+                <span className="text-gray-900 font-semibold">{data?.total_orders_today ?? 0}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <AlertTriangle size={18} className="text-amber-500" />
+                <span className="text-sm text-gray-500">Total Pending KYC:</span>
+                <span className="text-amber-600 font-semibold">{totalPendingKYC}</span>
               </div>
             </div>
-          </>
-        )}
-      </main>
-    </div>
+          </div>
+        </>
+      )}
+    </DashboardLayout>
   );
 }
