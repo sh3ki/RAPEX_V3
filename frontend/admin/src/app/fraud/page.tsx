@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import Sidebar from '@/components/Sidebar';
+import DashboardLayout from '@/components/DashboardLayout';
 import DataTable from '@/components/DataTable';
 import StatusBadge from '@/components/StatusBadge';
 import api from '@/lib/api';
@@ -78,15 +78,13 @@ export default function FraudPage() {
   ];
 
   return (
-    <div className="flex min-h-screen">
-      <Sidebar />
-      <main className="flex-1 lg:ml-64 p-6">
+    <DashboardLayout>
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h1 className="text-2xl font-bold text-white flex items-center gap-2">
+            <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
               <ShieldAlert className="text-red-400" size={24} /> Fraud Management
             </h1>
-            <p className="text-dark-muted text-sm mt-1">Flags, investigation cases, and blacklist</p>
+            <p className="text-gray-500 text-sm mt-1">Flags, investigation cases, and blacklist</p>
           </div>
           <div className="flex gap-2">
             <button className="btn-primary flex items-center gap-2" onClick={() => setShowCreateCase(true)}>
@@ -107,7 +105,7 @@ export default function FraudPage() {
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                 activeTab === tab
                   ? 'bg-primary text-white'
-                  : 'bg-dark-surface text-dark-muted hover:text-white border border-dark-border'
+                  : 'bg-white text-gray-500 hover:text-gray-900 border border-gray-200'
               }`}
             >
               {tab === 'flags' ? 'Fraud Flags' : 'Cases'}
@@ -126,7 +124,7 @@ export default function FraudPage() {
         {showCreateCase && (
           <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
             <div className="card w-full max-w-md space-y-4">
-              <h3 className="text-lg font-semibold text-white">New Investigation Case</h3>
+              <h3 className="text-lg font-semibold text-gray-900">New Investigation Case</h3>
               <input
                 className="input"
                 placeholder="Subject ID (UUID)"
@@ -176,7 +174,7 @@ export default function FraudPage() {
         {showBlacklist && (
           <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
             <div className="card w-full max-w-md space-y-4">
-              <h3 className="text-lg font-semibold text-white">Blacklist Account</h3>
+              <h3 className="text-lg font-semibold text-gray-900">Blacklist Account</h3>
               <input
                 className="input"
                 placeholder="Subject ID (UUID)"
@@ -211,7 +209,6 @@ export default function FraudPage() {
             </div>
           </div>
         )}
-      </main>
-    </div>
+    </DashboardLayout>
   );
 }
