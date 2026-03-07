@@ -1,0 +1,72 @@
+RAPEX USER APP – Feature Breakdown (MVP Phase)
+1. User Registration & Identity Verification
+ Description: Secure sign-up with verified identity.
+ Process: User fills out: Full Name, Age, Birthday, Address, Valid ID (from preloaded list) → Takes live selfie holding valid ID (camera only, no uploads) → App stores and sends for admin verification.
+2. Merchant & Product Discovery (Location-Based)
+ Description: Shows stores within 2km radius.
+ Process: Upon app launch, user grants location → Nearby merchants and categories auto-load based on coordinates.
+3. Product Browsing, Filtering & Search
+ Description: View items per store, category, or search.
+ Process: Dynamic product listings from merchant database → Filters: price, popularity, distance → Add to cart.
+4. Cart & Checkout System
+ Description: Standard cart + delivery/pickup selection.
+ Process: User adds to cart → Selects Pickup or Delivery → Moves to payment & delivery options.
+5. Delivery Option Selection (New Rules Applied)
+ Description: User chooses between 4 delivery types.
+ Options & Pricing:
+o Bicycle: ₱30 ( 1-2 kilos within 2 km)
+o Motorcycle: ₱40 ( within 2 km)
+o 4 Wheels: ₱80 ( above within 1.5 km) (for update)
+o Delivery option
+-Standard delivery- +10.00 (10-15 minutes)
+-Saver delivery - minimum (15-25 minutes)
+Additional 6 pesos every exceeding kilometers
+ Process: Delivery method selected at checkout → Fare automatically added to bill.
+6. Real-Time Order & Rider Tracking
+ Description: Track delivery live with rider info shown.
+ Process: After rider pickup → User sees map location, rider photo, name, and contact (view-only)
+- (Anti – Scam System Activated)
+.
+7. RAPEX Wallet (User Side)
+ Description: View balance, earn points, and top-up for large orders.
+ Process:
+o Wallet view in profile (Medium Size)
+o Required top-up for orders ₱1,001+
+o Points earned per order (₱300 = 1 pt)
+8. Points Rewards System
+ Description: Earn and use points like cash.
+ Rules:
+o ₱300 = 1 pt (₱1 value)
+o Purchases below ₱300 roll over (₱500 = 1 pt rule)
+ Process: Order amount tracked → Points auto-credited → Points usable at checkout.
+9. Referral System (QR-Based)
+ Description: Share QR code to earn points.
+ Rules:
+o 5 points per successful referral
+o Max 100 points per month
+ Process: Each user gets unique referral QR → New user signs up → Points credited to referrer.
+10. Order History + Real-Time Status Updates
+ Description: Track past/current orders and their status.
+ Process: Order cards show: status (Approved, Picked Up, In Transit, Delivered) → Details view.
+11. Push Notifications (Optional)
+ Description: Alerts for order status, promotions.
+ Process: Use Firebase or OneSignal for real-time updates like: "Order on the way", "Delivery completed"
+12. No Order Cancellation after Pickup
+ Description: Orders are locked once picked up by a rider.
+ Process: If rider accepts → Cancel button disabled → Message: “Order in transit and cannot be canceled”
+13. in-App Chat with Admin (Wallet Top-Up Support)
+ Description: Chat with admin to confirm wallet top-up.
+ Process:
+o User sends GCash screenshot via chat
+o Admin replies once verified and top-up is completed
+ Features:
+o Upload photo (GCash receipt)
+o Admin-only chatroom (no other users/riders)
+14. Mandatory Live Location Until Order Completion ( anti-scam system)
+ Description: User location must stay active until order is delivered.
+ Process:
+o User must grant location on app open
+o If location or data is turned off during delivery, app prompts to re-enable even shutting off the mobile when mobile re open location will automatically turn on.
+o Order cannot proceed unless location is active
+15. ✅ Front-End UI/UX Design (User App)
+ Description: Logo of RAPEX , combination of 3 colors (Orange,Purple,White), easy navigation, Search bar by category,tailored for barangay-level e-commerce.
