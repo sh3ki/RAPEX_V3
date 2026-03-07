@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/authStore';
 
 export default function LoginPage() {
-  const [phone, setPhone] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -17,7 +17,7 @@ export default function LoginPage() {
     setError('');
     setLoading(true);
     try {
-      await login(phone, password);
+      await login(email, password);
       router.push('/dashboard');
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Invalid credentials');
@@ -43,13 +43,13 @@ export default function LoginPage() {
           <h2 className="text-lg font-semibold text-white text-center">Sign In</h2>
           {error && <p className="text-red-400 text-sm text-center">{error}</p>}
           <div>
-            <label className="block text-sm text-dark-muted mb-1">Phone Number</label>
+            <label className="block text-sm text-dark-muted mb-1">Email Address</label>
             <input
-              type="text"
+              type="email"
               className="input"
-              placeholder="09XXXXXXXXX"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
+              placeholder="admin@rapex.ph"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
               required
             />
           </div>
