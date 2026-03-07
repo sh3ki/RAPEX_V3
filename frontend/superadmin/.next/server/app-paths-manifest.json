@@ -1,8 +1,8 @@
 {
-  "/_not-found/page": "app/_not-found/page.js",
-  "/dashboard/page": "app/dashboard/page.js",
+  "/login/page": "app/login/page.js",
+  "/settings/page": "app/settings/page.js",
   "/wallet-ledger/page": "app/wallet-ledger/page.js",
   "/admins/page": "app/admins/page.js",
-  "/audit-log/page": "app/audit-log/page.js",
-  "/login/page": "app/login/page.js"
+  "/dashboard/page": "app/dashboard/page.js",
+  "/blacklist/page": "app/blacklist/page.js"
 }
