@@ -1,8 +1,9 @@
 'use client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '@/lib/api';
-import { Power, Bike, DollarSign, Wallet, MapPin, Bell } from 'lucide-react';
-import { useState, useEffect, useCallback } from 'react';
+import DashboardLayout from '@/components/DashboardLayout';
+import { Power, Bike, DollarSign, Wallet, MapPin } from 'lucide-react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 
 export default function RiderHomePage() {
@@ -10,14 +11,12 @@ export default function RiderHomePage() {
   const [ping, setPing] = useState<any>(null);
   const [countdown, setCountdown] = useState(0);
 
-  // Dashboard stats
   const { data: dash } = useQuery({
     queryKey: ['rider-dashboard'],
     queryFn: async () => { const { data } = await api.get('/rider/dashboard/'); return data; },
     refetchInterval: 10_000,
   });
 
-  // Active order
   const { data: activeOrder } = useQuery({
     queryKey: ['active-order'],
     queryFn: async () => {
@@ -29,13 +28,11 @@ export default function RiderHomePage() {
 
   const isOnline = dash?.is_online ?? false;
 
-  // Toggle online/offline
   const toggleMut = useMutation({
     mutationFn: async () => { await api.patch('/rider/online/'); },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['rider-dashboard'] }),
   });
 
-  // GPS location broadcasting
   useEffect(() => {
     if (!isOnline) return;
     const sendLocation = () => {
@@ -49,7 +46,6 @@ export default function RiderHomePage() {
     return () => clearInterval(interval);
   }, [isOnline]);
 
-  // WebSocket for delivery pings
   useEffect(() => {
     if (!isOnline) return;
     const wsUrl = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000').replace('http', 'ws').replace('/api/v1', '');
@@ -62,21 +58,19 @@ export default function RiderHomePage() {
         const msg = JSON.parse(e.data);
         if (msg.type === 'rider.ping' || msg.type === 'delivery_request') {
           setPing(msg.data || msg);
-          setCountdown(180); // 3 min
+          setCountdown(180);
         }
       };
     } catch {}
     return () => { ws?.close(); };
   }, [isOnline]);
 
-  // Countdown timer for pings
   useEffect(() => {
     if (countdown <= 0) { if (ping) setPing(null); return; }
     const t = setTimeout(() => setCountdown(c => c - 1), 1000);
     return () => clearTimeout(t);
   }, [countdown, ping]);
 
-  // Accept / Reject delivery
   const acceptMut = useMutation({
     mutationFn: async (orderId: string) => { await api.post(`/rider/orders/${orderId}/accept/`); },
     onSuccess: () => { setPing(null); setCountdown(0); qc.invalidateQueries({ queryKey: ['active-order'] }); },
@@ -87,82 +81,82 @@ export default function RiderHomePage() {
   });
 
   return (
-    <div className="p-4 space-y-4">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-bold">RAPEX Rider</h1>
-          <span className={`text-xs ${isOnline ? 'text-green-400' : 'text-red-400'}`}>{isOnline ? '● Online' : '○ Offline'}</span>
-        </div>
-        <Link href="/notifications" className="p-2 rounded-lg bg-dark-surface border border-dark-border relative">
-          <Bell size={18} />
-        </Link>
+    <DashboardLayout>
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold text-gray-900">Rider Dashboard</h1>
+        <p className="text-sm text-gray-500 mt-1">Manage your deliveries</p>
       </div>
 
       {/* Go Online / Offline toggle */}
       <button
         onClick={() => toggleMut.mutate()}
         disabled={toggleMut.isPending}
-        className={`w-full py-6 rounded-2xl font-bold text-lg flex flex-col items-center gap-2 transition-all ${isOnline ? 'bg-green-500/10 border-2 border-green-500/50 text-green-400' : 'bg-red-500/10 border-2 border-red-500/30 text-red-400'}`}
+        className={`w-full py-6 rounded-2xl font-bold text-lg flex flex-col items-center gap-2 transition-all mb-6 ${isOnline ? 'bg-emerald-50 border-2 border-emerald-300 text-emerald-600' : 'bg-red-50 border-2 border-red-200 text-red-500'}`}
       >
         <Power size={40} />
-        {toggleMut.isPending ? 'Updating…' : isOnline ? 'You are ONLINE' : 'Go ONLINE'}
+        {toggleMut.isPending ? 'Updating...' : isOnline ? 'You are ONLINE' : 'Go ONLINE'}
       </button>
 
       {/* Stats */}
-      <div className="grid grid-cols-3 gap-3">
-        <div className="card text-center !p-4">
-          <Bike size={20} className="text-blue-400 mx-auto mb-1" />
-          <p className="text-lg font-bold">{dash?.deliveries_today || 0}</p>
-          <p className="text-[10px] text-dark-muted">Deliveries</p>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-6">
+        <div className="card text-center py-6">
+          <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center mx-auto mb-3">
+            <Bike size={20} className="text-blue-500" />
+          </div>
+          <p className="text-2xl font-bold text-gray-900">{dash?.deliveries_today || 0}</p>
+          <p className="text-xs text-gray-500 mt-1">Deliveries Today</p>
         </div>
-        <div className="card text-center !p-4">
-          <DollarSign size={20} className="text-green-400 mx-auto mb-1" />
-          <p className="text-lg font-bold">₦{parseFloat(dash?.earnings_today || '0').toLocaleString()}</p>
-          <p className="text-[10px] text-dark-muted">Earnings</p>
+        <div className="card text-center py-6">
+          <div className="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center mx-auto mb-3">
+            <DollarSign size={20} className="text-emerald-500" />
+          </div>
+          <p className="text-2xl font-bold text-gray-900">₱{parseFloat(dash?.earnings_today || '0').toLocaleString()}</p>
+          <p className="text-xs text-gray-500 mt-1">Earnings Today</p>
         </div>
-        <div className="card text-center !p-4">
-          <Wallet size={20} className="text-primary-500 mx-auto mb-1" />
-          <p className="text-lg font-bold">₦{parseFloat(dash?.wallet_balance || '0').toLocaleString()}</p>
-          <p className="text-[10px] text-dark-muted">Wallet</p>
+        <div className="card text-center py-6">
+          <div className="w-10 h-10 rounded-xl bg-primary-50 flex items-center justify-center mx-auto mb-3">
+            <Wallet size={20} className="text-primary-500" />
+          </div>
+          <p className="text-2xl font-bold text-gray-900">₱{parseFloat(dash?.wallet_balance || '0').toLocaleString()}</p>
+          <p className="text-xs text-gray-500 mt-1">Wallet Balance</p>
         </div>
       </div>
 
       {/* Active order */}
       {activeOrder && activeOrder.id && (
-        <Link href={`/orders/${activeOrder.id}`} className="card border-primary-500/30 !p-4 space-y-2 block">
-          <div className="flex items-center justify-between">
-            <h2 className="font-semibold text-sm text-primary-500 flex items-center gap-2"><MapPin size={14} /> Active Delivery</h2>
+        <Link href={`/orders/${activeOrder.id}`} className="card border-primary-300 mb-6 block hover:shadow-md transition-shadow">
+          <div className="flex items-center justify-between mb-2">
+            <h2 className="font-semibold text-sm text-primary-600 flex items-center gap-2"><MapPin size={14} /> Active Delivery</h2>
             <span className="badge-blue">{activeOrder.status}</span>
           </div>
-          <p className="text-sm">Order #{(activeOrder.id || '').slice(0, 8)}</p>
-          <p className="text-xs text-dark-muted">{activeOrder.delivery_address}</p>
-          <p className="text-xs text-primary-500">Tap to view details →</p>
+          <p className="text-sm text-gray-900">Order #{(activeOrder.id || '').slice(0, 8)}</p>
+          <p className="text-xs text-gray-500">{activeOrder.delivery_address}</p>
+          <p className="text-xs text-primary-500 mt-2">Tap to view details →</p>
         </Link>
       )}
 
       {/* Delivery Ping */}
       {ping && (
-        <div className="fixed inset-x-0 bottom-16 p-4 z-50">
-          <div className="max-w-lg mx-auto card border-primary-500 !p-4 space-y-3">
+        <div className="fixed inset-x-0 bottom-4 p-4 z-50">
+          <div className="max-w-lg mx-auto bg-white rounded-2xl shadow-lg border border-primary-200 p-5 space-y-3">
             <div className="flex items-center justify-between">
-              <h2 className="font-bold text-primary-500 flex items-center gap-2"><Bike size={18} /> New Delivery Request!</h2>
-              <span className="text-sm font-mono text-red-400">{Math.floor(countdown / 60)}:{String(countdown % 60).padStart(2, '0')}</span>
+              <h2 className="font-bold text-primary-600 flex items-center gap-2"><Bike size={18} /> New Delivery Request!</h2>
+              <span className="text-sm font-mono text-red-500">{Math.floor(countdown / 60)}:{String(countdown % 60).padStart(2, '0')}</span>
             </div>
-            {ping.store_name && <p className="text-sm">From: <strong>{ping.store_name}</strong></p>}
-            {ping.delivery_address && <p className="text-xs text-dark-muted">To: {ping.delivery_address}</p>}
-            {ping.total && <p className="text-sm font-semibold">₦{parseFloat(ping.total).toLocaleString()}</p>}
+            {ping.store_name && <p className="text-sm text-gray-700">From: <strong>{ping.store_name}</strong></p>}
+            {ping.delivery_address && <p className="text-xs text-gray-500">To: {ping.delivery_address}</p>}
+            {ping.total && <p className="text-sm font-semibold text-gray-900">₱{parseFloat(ping.total).toLocaleString()}</p>}
             <div className="flex gap-3">
-              <button onClick={() => rejectMut.mutate(ping.order_id || ping.id)} disabled={rejectMut.isPending} className="flex-1 py-3 rounded-lg border border-red-500/50 text-red-400 font-semibold hover:bg-red-500/10">
+              <button onClick={() => rejectMut.mutate(ping.order_id || ping.id)} disabled={rejectMut.isPending} className="flex-1 py-3 rounded-lg border border-red-300 text-red-500 font-semibold hover:bg-red-50 transition-colors">
                 Reject
               </button>
-              <button onClick={() => acceptMut.mutate(ping.order_id || ping.id)} disabled={acceptMut.isPending} className="flex-1 btn-primary !py-3">
-                {acceptMut.isPending ? 'Accepting…' : 'Accept'}
+              <button onClick={() => acceptMut.mutate(ping.order_id || ping.id)} disabled={acceptMut.isPending} className="flex-1 py-3 rounded-lg bg-primary-500 text-white font-semibold hover:bg-primary-600 transition-colors">
+                {acceptMut.isPending ? 'Accepting...' : 'Accept'}
               </button>
             </div>
           </div>
         </div>
       )}
-    </div>
+    </DashboardLayout>
   );
 }
