@@ -1,8 +1,1 @@
-{
-  "/login/page": "app/login/page.js",
-  "/settings/page": "app/settings/page.js",
-  "/wallet-ledger/page": "app/wallet-ledger/page.js",
-  "/admins/page": "app/admins/page.js",
-  "/dashboard/page": "app/dashboard/page.js",
-  "/blacklist/page": "app/blacklist/page.js"
-}
+{}
