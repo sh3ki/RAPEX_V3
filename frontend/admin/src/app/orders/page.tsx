@@ -1,7 +1,7 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import Sidebar from '@/components/Sidebar';
+import DashboardLayout from '@/components/DashboardLayout';
 import DataTable from '@/components/DataTable';
 import StatusBadge from '@/components/StatusBadge';
 import api from '@/lib/api';
@@ -56,12 +56,10 @@ export default function OrdersPage() {
   ];
 
   return (
-    <div className="flex min-h-screen">
-      <Sidebar />
-      <main className="flex-1 lg:ml-64 p-6">
+    <DashboardLayout>
         <div className="mb-6">
-          <h1 className="text-2xl font-bold text-white">Orders</h1>
-          <p className="text-dark-muted text-sm mt-1">Platform order overview</p>
+          <h1 className="text-2xl font-bold text-gray-900">Orders</h1>
+          <p className="text-gray-500 text-sm mt-1">Platform order overview</p>
         </div>
 
         <DataTable
@@ -72,7 +70,6 @@ export default function OrdersPage() {
           onPageChange={() => {}}
           isLoading={isLoading}
         />
-      </main>
-    </div>
+    </DashboardLayout>
   );
 }
