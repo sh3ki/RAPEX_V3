@@ -12,8 +12,12 @@ import requests
 from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
+from django.utils.crypto import get_random_string
+from google.auth.transport import requests as google_requests
+from google.oauth2 import id_token as google_id_token
 from rest_framework_simplejwt.tokens import RefreshToken
 
+from apps.core.constants import Roles
 from apps.core.exceptions import InvalidOTP, OTPExpired, OTPRateLimitExceeded, RapexAPIException
 
 from .models import (
@@ -22,6 +26,7 @@ from .models import (
     MerchantProfile,
     OTPRecord,
     RiderProfile,
+    SocialAccount,
     SuperAdminProfile,
     UserProfile,
 )
@@ -255,6 +260,9 @@ class AuthService:
                 'id': str(user.id),
                 'email': user.email,
                 'phone': user.phone,
+                'first_name': user.first_name,
+                'last_name': user.last_name,
+                'avatar_url': user.avatar_url,
                 'role': user.role,
                 'is_verified': user.is_verified,
             },
@@ -280,6 +288,9 @@ class AuthService:
                 'id': str(user.id),
                 'email': user.email,
                 'phone': user.phone,
+                'first_name': user.first_name,
+                'last_name': user.last_name,
+                'avatar_url': user.avatar_url,
                 'role': user.role,
                 'is_verified': user.is_verified,
             },
@@ -315,3 +326,224 @@ class DeviceFingerprintService:
 
         fingerprint = DeviceFingerprintService.generate(device_id, user_agent, platform)
         return user.device_id == fingerprint
+
+
+class GoogleAuthService:
+    """Handles Google Sign-In and Sign-Up flows."""
+
+    @staticmethod
+    def _verify_google_token(id_token: str) -> dict:
+        client_ids = [client_id.strip() for client_id in settings.GOOGLE_OAUTH_CLIENT_IDS if client_id.strip()]
+        if not client_ids:
+            raise RapexAPIException(
+                'Google authentication is not configured.',
+                code='google_not_configured',
+                status_code=503,
+            )
+
+        token_info = None
+        for client_id in client_ids:
+            try:
+                token_info = google_id_token.verify_oauth2_token(id_token, google_requests.Request(), client_id)
+                break
+            except Exception:
+                continue
+
+        if not token_info:
+            raise RapexAPIException('Invalid Google token.', code='invalid_google_token', status_code=401)
+
+        if token_info.get('iss') not in ('accounts.google.com', 'https://accounts.google.com'):
+            raise RapexAPIException('Invalid token issuer.', code='invalid_google_issuer', status_code=401)
+
+        email = (token_info.get('email') or '').lower()
+        if not email:
+            raise RapexAPIException('Google account has no email.', code='google_email_missing', status_code=400)
+
+        if not token_info.get('email_verified', False):
+            raise RapexAPIException('Google email is not verified.', code='google_email_not_verified', status_code=403)
+
+        return {
+            'sub': token_info.get('sub'),
+            'email': email,
+            'email_verified': bool(token_info.get('email_verified', False)),
+            'full_name': token_info.get('name') or '',
+            'given_name': token_info.get('given_name') or '',
+            'family_name': token_info.get('family_name') or '',
+            'picture': token_info.get('picture') or '',
+            'raw': token_info,
+        }
+
+    @staticmethod
+    def _sync_user_identity_fields(user: CustomUser, google_data: dict) -> None:
+        changed_fields = []
+
+        if google_data.get('email') and user.email != google_data['email']:
+            user.email = google_data['email']
+            changed_fields.append('email')
+
+        if google_data.get('given_name') and user.first_name != google_data['given_name']:
+            user.first_name = google_data['given_name']
+            changed_fields.append('first_name')
+
+        if google_data.get('family_name') and user.last_name != google_data['family_name']:
+            user.last_name = google_data['family_name']
+            changed_fields.append('last_name')
+
+        if google_data.get('picture') and user.avatar_url != google_data['picture']:
+            user.avatar_url = google_data['picture']
+            changed_fields.append('avatar_url')
+
+        if changed_fields:
+            user.save(update_fields=changed_fields)
+
+    @staticmethod
+    def _sync_social_account(user: CustomUser, google_data: dict) -> SocialAccount:
+        existing = SocialAccount.objects.filter(
+            provider=SocialAccount.Provider.GOOGLE,
+            provider_user_id=google_data['sub'],
+        ).first()
+        if existing and existing.user_id != user.id:
+            raise RapexAPIException('Google account already linked to another user.', code='google_account_conflict', status_code=409)
+
+        social_account, _ = SocialAccount.objects.update_or_create(
+            provider=SocialAccount.Provider.GOOGLE,
+            provider_user_id=google_data['sub'],
+            defaults={
+                'user': user,
+                'email': google_data['email'],
+                'email_verified': google_data['email_verified'],
+                'picture_url': google_data.get('picture', ''),
+                'extra_data': google_data.get('raw', {}),
+                'last_login_at': timezone.now(),
+            },
+        )
+        return social_account
+
+    @staticmethod
+    def _ensure_profile(user: CustomUser, role: str, full_name: str, extra_data: dict) -> None:
+        if role == Roles.USER:
+            UserProfile.objects.get_or_create(user=user, defaults={'full_name': full_name})
+        elif role == Roles.MERCHANT:
+            MerchantProfile.objects.get_or_create(
+                user=user,
+                defaults={
+                    'full_name': full_name,
+                    'business_name': extra_data.get('business_name', ''),
+                },
+            )
+        elif role == Roles.RIDER:
+            RiderProfile.objects.get_or_create(user=user, defaults={'full_name': full_name})
+        elif role == Roles.ADMIN:
+            AdminProfile.objects.get_or_create(
+                user=user,
+                defaults={
+                    'full_name': full_name,
+                    'sub_role': extra_data.get('admin_sub_role') or AdminProfile.SubRole.OPERATIONS,
+                },
+            )
+        elif role == Roles.SUPERADMIN:
+            SuperAdminProfile.objects.get_or_create(user=user, defaults={'full_name': full_name})
+
+    @staticmethod
+    def login(id_token: str, role: str | None = None) -> dict:
+        google_data = GoogleAuthService._verify_google_token(id_token)
+
+        social_account = SocialAccount.objects.select_related('user').filter(
+            provider=SocialAccount.Provider.GOOGLE,
+            provider_user_id=google_data['sub'],
+        ).first()
+
+        user = social_account.user if social_account else None
+        if not user:
+            user = CustomUser.objects.filter(email=google_data['email']).first()
+            if user:
+                GoogleAuthService._sync_social_account(user, google_data)
+
+        if not user:
+            raise RapexAPIException(
+                'No account is linked to this Google email. Please sign up first.',
+                code='google_signup_required',
+                status_code=404,
+            )
+
+        if role and user.role != role:
+            raise RapexAPIException('This Google account belongs to a different role.', code='role_mismatch', status_code=403)
+
+        GoogleAuthService._sync_user_identity_fields(user, google_data)
+        GoogleAuthService._sync_social_account(user, google_data)
+        return AuthService.login_by_user(user)
+
+    @staticmethod
+    @transaction.atomic
+    def signup(
+        id_token: str,
+        role: str,
+        phone: str,
+        otp_code: str,
+        full_name: str = '',
+        extra_data: dict | None = None,
+    ) -> dict:
+        extra_data = extra_data or {}
+        google_data = GoogleAuthService._verify_google_token(id_token)
+
+        if role in (Roles.ADMIN, Roles.SUPERADMIN) and not settings.GOOGLE_ALLOW_PRIVILEGED_SIGNUP:
+            raise RapexAPIException(
+                'Google signup for Admin/SuperAdmin is disabled.',
+                code='privileged_google_signup_disabled',
+                status_code=403,
+            )
+
+        OTPService.verify_otp(phone=phone, otp_code=otp_code, purpose=OTPRecord.Purpose.REGISTRATION)
+
+        social_account = SocialAccount.objects.select_related('user').filter(
+            provider=SocialAccount.Provider.GOOGLE,
+            provider_user_id=google_data['sub'],
+        ).first()
+        if social_account:
+            user = social_account.user
+            if user.role != role:
+                raise RapexAPIException('This Google account is already linked to another role.', code='role_mismatch', status_code=403)
+            GoogleAuthService._sync_user_identity_fields(user, google_data)
+            return AuthService.login_by_user(user)
+
+        existing_email_user = CustomUser.objects.filter(email=google_data['email']).first()
+        if existing_email_user and existing_email_user.role != role:
+            raise RapexAPIException('Email already belongs to another role account.', code='email_role_conflict', status_code=409)
+
+        if existing_email_user:
+            if existing_email_user.phone != phone:
+                if CustomUser.objects.filter(phone=phone).exclude(pk=existing_email_user.pk).exists():
+                    raise RapexAPIException('Phone number already registered.', code='phone_exists', status_code=409)
+                existing_email_user.phone = phone
+                existing_email_user.save(update_fields=['phone'])
+
+            user = existing_email_user
+        else:
+            if CustomUser.objects.filter(phone=phone).exists():
+                raise RapexAPIException('Phone number already registered.', code='phone_exists', status_code=409)
+
+            user = CustomUser.objects.create_user(
+                phone=phone,
+                role=role,
+                email=google_data['email'],
+                is_verified=True,
+                first_name=google_data.get('given_name', ''),
+                last_name=google_data.get('family_name', ''),
+                avatar_url=google_data.get('picture', ''),
+            )
+            user.set_unusable_password()
+            user.save(update_fields=['password'])
+
+        profile_name = (full_name or google_data.get('full_name') or '').strip()
+        if not profile_name:
+            profile_name = (f"{user.first_name} {user.last_name}".strip() or google_data['email'])
+
+        GoogleAuthService._sync_user_identity_fields(user, google_data)
+        GoogleAuthService._ensure_profile(user, role, profile_name, extra_data)
+        GoogleAuthService._sync_social_account(user, google_data)
+
+        if not user.device_id:
+            user.device_id = get_random_string(32)
+            user.save(update_fields=['device_id'])
+
+        return AuthService.login_by_user(user)
