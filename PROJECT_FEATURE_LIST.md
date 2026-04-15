@@ -4,7 +4,7 @@
 > **Date:** March 2026  
 > **Architecture:** Modular-Monolith · Django 5.x + Next.js 14+ + React Native (Expo)  
 > **Database:** PostgreSQL 16 · Cache: Redis 7 · Queue: Celery · Real-Time: Django Channels  
-> **UI:** Apex Dashboard (exact copy) · Orange `#FF6B00` · Purple `#7C3AED` · Dark Mode default  
+> **UI:** Apex Dashboard (exact copy) · Purple `#7C3AED` · Violet `#A78BFA` · Dark Mode default  
 > **Roles:** SuperAdmin · Admin · Merchant · Rider · User/Customer
 
 ---
@@ -17,6 +17,14 @@
 4. [Rider Role](#4-rider-role)
 5. [User / Customer Role](#5-user--customer-role)
 6. [Cross-Role & Shared Systems](#6-cross-role--shared-systems)
+
+---
+
+## Web UI Implementation Rule (Mandatory)
+
+- All reusable dashboard UI must be implemented in `frontend/shared/src`.
+- Role apps (`frontend/admin`, `frontend/superadmin`, `frontend/merchant`, `frontend/rider`, `frontend/user`) consume shared components and keep only role-specific wrappers/composition.
+- Do not duplicate common UI primitives (Sidebar, TopBar, DashboardLayout, DataTable, shared forms, badges, cards, chart wrappers).
 
 ---
 
@@ -296,7 +304,7 @@
 
 **Functionality:**
 - **Chat Inbox List:** Left panel lists all chat threads. Tabs: Riders / Users / Merchants. Shows: Name, last message preview, unread count badge, time of last message. Sorted by most recent activity.
-- **Thread View:** Right panel shows message thread. Messages aligned: admin messages right (orange background), other party messages left (grey background). Timestamps on each message.
+- **Thread View:** Right panel shows message thread. Messages aligned: admin messages right (purple background), other party messages left (grey background). Timestamps on each message.
 - **Message Input:** Rich text-capable input. Can send: plain text, images (embed preview), file attachments (PDF/JPG/PNG). Send on Enter or click send button.
 - **GCash Screenshot Flow:**
   1. Rider/User sends top-up request message with GCash screenshot attachment
@@ -323,7 +331,7 @@
 - **Weekly Incentive Settings:** Editable: delivery threshold (default 40), bonus amount (default ₱250). Shows current active values and next Monday's cycle start.
 - **Sub-Role Management:** Create custom admin sub-roles (e.g., "Night Shift Support"). Define permission set with the same permission matrix as SuperAdmin's admin management panel.
 - **KYC Auto-Approval Rules:** Toggle which document types pass auto-approval. E.g., "PhilSys ID: Auto-Approve", "Barangay Clearance: Manual Review Required". Rule changes logged.
-- **System Announcement Banner:** Input: message text, background color (orange/purple/red), display duration (hours). Banner appears at top of ALL user/merchant/rider web and mobile dashboards.
+- **System Announcement Banner:** Input: message text, background color (purple/violet/red), display duration (hours). Banner appears at top of ALL user/merchant/rider web and mobile dashboards.
 - **App Version Control:** Enter minimum required version for Android mobile app. Users on older versions see a "Required Update" modal on launch.
 - **Maintenance Mode (Module-Level):** Toggle per individual module: "Pre-Loved module under maintenance" — hides the Pre-Loved tab from user app without affecting other modules.
 
@@ -365,7 +373,7 @@
   - *Active Orders* — real-time count via WebSocket, with store-type breakdown on hover
   - *Pending Orders* — red badge count, click navigates to order inbox
   - *Commission Paid Today* — transparent breakdown of RAPEX deductions
-- **Store Status Toggle Bar:** One toggle per active store type. Orange toggle = Open, grey = Closed. Merchant can flip any store open/closed from the dashboard header. Change broadcasts to user app within 5 seconds.
+- **Store Status Toggle Bar:** One toggle per active store type. Purple toggle = Open, grey = Closed. Merchant can flip any store open/closed from the dashboard header. Change broadcasts to user app within 5 seconds.
 - **Revenue Breakdown Chart:** Apex bar/area chart. Toggle between: All Stores Combined / Shop Only / Fresh Market Only / Ready-to-Eat Only / Pre-Loved Only. X-axis: last 14 days.
 - **Best-Selling Products Widget:** Top 5 products across all stores with name, store type icon, units sold today, revenue contribution.
 - **Recent Orders Feed:** Auto-refresh table of last 10 orders. Accept/Reject buttons inline for Pending orders. Timer countdown shows seconds remaining to accept.
@@ -384,7 +392,7 @@
   - Description (multi-line text, max 500 chars)
   - Category (dropdown — merchant creates categories or selects from existing)
   - Base Price (number input with ₱ prefix. Min ₱1)
-  - Auto-Markup Preview: As merchant types base price, system instantly shows markup % and final selling price in orange below the field
+- Auto-Markup Preview: As merchant types base price, system instantly shows markup % and final selling price in purple below the field
   - Images: Drag-and-drop multi-image uploader. Min 1, max 6 images. Accepts JPG/PNG. Max 2MB each. First image = primary/thumbnail.
   - Inventory Toggle: "Enable Stock Tracking" checkbox. If enabled: Stock Quantity field appears. Shows "Out of Stock" badge to users when 0 reached.
   - Stock Quantity (optional): number input
@@ -578,7 +586,7 @@
 
 **Functionality:**
 - **Online/Offline Toggle:** Large, prominent toggle at the top. When Offline, rider does not receive order pings. When Online, rider is included in the auto-ping pool for nearby orders. Status synced to server immediately on toggle.
-- **Wallet Balance Card:** Large orange card showing current RAPEX Wallet balance prominently. Tappable to go to wallet detail.
+- **Wallet Balance Card:** Large purple card showing current RAPEX Wallet balance prominently. Tappable to go to wallet detail.
 - **Today's Earnings:** Total delivery earnings credited today (gross, before commission deduction).
 - **Weekly Delivery Count + Progress Bar:** "X of 40 deliveries" with a progress bar toward the ₱250 incentive. Color changes: grey (0–29), yellow (30–39), green (40+, incentive achieved).
 - **Active Delivery Card:** When on a delivery — shows current order: merchant name, customer drop-off address, order total, a "View Map" button and delivery status. This card is persistent until delivery is confirmed.
@@ -630,7 +638,7 @@
 **Feature:** The rider's core financial instrument for the platform.
 
 **Functionality:**
-- **Balance View:** Current balance shown on home screen and in Wallet detail page. Blue card (or orange, per design). Balance updates in real time after every transaction.
+- **Balance View:** Current balance shown on home screen and in Wallet detail page. Blue card (or purple, per design). Balance updates in real time after every transaction.
 - **Transaction Ledger:** Full chronological list of every wallet event: Type (Initial Load / Top-Up / Payment to Merchant / Commission Deduction / Penalty / Incentive Bonus / Referral Credit), Amount (green for credits, red for debits), Balance After transaction, Timestamp, Reference note.
 - **COD Payment Flow:** Rider pays merchant from wallet at pickup. Merchant confirms "Picked Up" → system records `WalletTransaction(type=PAYMENT_TO_MERCHANT, amount=order_total)`. Wallet debited instantly.
 - **Commission Deduction:** After "Confirm Delivery" → system auto-calculates commission based on order value bracket → creates `WalletTransaction(type=COMMISSION_DEDUCTION)`. Transparent: rider can see commission amount in transaction log.
@@ -849,7 +857,7 @@ All push events delivered via FCM to the rider's registered device:
 
 **Functionality:**
 - **Order Status Page (Auto-opens after order placed):**
-  - Order status timeline: Horizontal or vertical step indicator with colored nodes (grey=pending, orange=current, green=completed)
+  - Order status timeline: Horizontal or vertical step indicator with colored nodes (grey=pending, purple=current, green=completed)
   - Steps per store type:
     - Shop/Pre-Loved/Fresh Market: Order Placed → Merchant Accepted → Preparing → Rider Assigned → Order Picked Up → In Transit → Delivered
     - Ready-to-Eat: Order Placed → Merchant Accepted → Cooking → Ready → Rider Assigned → Picked Up → Delivered
@@ -1109,8 +1117,8 @@ All push events delivered via FCM to the rider's registered device:
   - Customization panel (slide-in from right): sidebar style, accent color, mode
 - **Responsive:** Designed mobile-first. On screens < 768px: sidebar collapses, top nav shows hamburger menu.
 - **Theme Colors applied to Apex components:**
-  - Primary: `#FF6B00` (orange) — buttons, active nav, chart accent 1
-  - Secondary: `#7C3AED` (purple) — secondary buttons, chart accent 2, badges
+  - Primary: `#7C3AED` (purple) — buttons, active nav, chart accent 1
+  - Secondary: `#A78BFA` (violet) — secondary buttons, chart accent 2, badges
   - Success: `#22C55E` (green)
   - Danger: `#EF4444` (red)
   - Warning: `#EAB308` (yellow)
