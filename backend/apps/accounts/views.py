@@ -12,6 +12,8 @@ from rest_framework.views import APIView
 from apps.core.permissions import IsAdmin, IsMerchant, IsRider, IsSuperAdmin, IsUser
 
 from .serializers import (
+    GoogleLoginSerializer,
+    GoogleSignupSerializer,
     KYCUploadSerializer,
     LoginSerializer,
     LogoutSerializer,
@@ -26,7 +28,7 @@ from .serializers import (
     UserRegistrationSerializer,
     AdminProfileSerializer,
 )
-from .services import AuthService, OTPService
+from .services import AuthService, GoogleAuthService, OTPService
 
 logger = logging.getLogger(__name__)
 
@@ -143,6 +145,42 @@ class LoginView(APIView):
             password=serializer.validated_data['password'],
         )
         return Response(result, status=status.HTTP_200_OK)
+
+
+class GoogleLoginView(APIView):
+    permission_classes = [AllowAny]
+    throttle_scope = 'auth'
+
+    def post(self, request):
+        serializer = GoogleLoginSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        result = GoogleAuthService.login(
+            id_token=serializer.validated_data['id_token'],
+            role=serializer.validated_data.get('role'),
+        )
+        return Response(result, status=status.HTTP_200_OK)
+
+
+class GoogleSignupView(APIView):
+    permission_classes = [AllowAny]
+    throttle_scope = 'auth'
+
+    def post(self, request):
+        serializer = GoogleSignupSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        result = GoogleAuthService.signup(
+            id_token=data['id_token'],
+            role=data['role'],
+            phone=data['phone'],
+            otp_code=data['otp_code'],
+            full_name=data.get('full_name', ''),
+            extra_data={
+                'business_name': data.get('business_name', ''),
+                'admin_sub_role': data.get('admin_sub_role'),
+            },
+        )
+        return Response(result, status=status.HTTP_201_CREATED)
 
 
 class LogoutView(APIView):
