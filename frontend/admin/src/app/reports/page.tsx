@@ -8,26 +8,26 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 
 type ReportType = 'daily' | 'weekly' | 'store-type';
 
-const COLORS = ['#FF6B00', '#7C3AED', '#22C55E', '#3B82F6', '#F59E0B', '#EF4444'];
+const COLORS = ['#7C3AED', '#A78BFA', '#22C55E', '#3B82F6', '#F59E0B', '#EF4444'];
 
 export default function ReportsPage() {
   const [activeTab, setActiveTab] = useState<ReportType>('daily');
 
   const { data: dailyData, isLoading: loadingDaily } = useQuery({
     queryKey: ['admin-report-daily'],
-    queryFn: () => api.get('/admin-panel/reports/daily/').then((r) => r.data),
+    queryFn: () => api.get('/admin/reports/daily/').then((r) => r.data),
     enabled: activeTab === 'daily',
   });
 
   const { data: weeklyData, isLoading: loadingWeekly } = useQuery({
     queryKey: ['admin-report-weekly'],
-    queryFn: () => api.get('/admin-panel/reports/weekly/').then((r) => r.data),
+    queryFn: () => api.get('/admin/reports/weekly/').then((r) => r.data),
     enabled: activeTab === 'weekly',
   });
 
   const { data: storeTypeData, isLoading: loadingStore } = useQuery({
     queryKey: ['admin-report-store-type'],
-    queryFn: () => api.get('/admin-panel/reports/by-store-type/').then((r) => r.data),
+    queryFn: () => api.get('/admin/reports/by-store-type/').then((r) => r.data),
     enabled: activeTab === 'store-type',
   });
 
@@ -106,7 +106,7 @@ export default function ReportsPage() {
                     <XAxis dataKey="date" stroke="#94A3B8" fontSize={12} />
                     <YAxis stroke="#94A3B8" fontSize={12} />
                     <Tooltip contentStyle={{ background: '#1E293B', border: '1px solid #334155', borderRadius: 8 }} />
-                    <Bar dataKey="revenue" fill="#FF6B00" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="revenue" fill="#7C3AED" radius={[4, 4, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
