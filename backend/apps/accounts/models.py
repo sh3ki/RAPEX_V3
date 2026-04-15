@@ -46,6 +46,9 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     phone = models.CharField(max_length=20, unique=True, db_index=True)
     email = models.EmailField(max_length=255, unique=True, null=True, blank=True)
+    first_name = models.CharField(max_length=150, blank=True, default='')
+    last_name = models.CharField(max_length=150, blank=True, default='')
+    avatar_url = models.URLField(max_length=500, blank=True, default='')
     role = models.CharField(max_length=20, choices=Roles.CHOICES, db_index=True)
     is_active = models.BooleanField(default=True)
     is_verified = models.BooleanField(default=False)
@@ -173,6 +176,29 @@ class UserProfile(BaseModel):
 
     def __str__(self):
         return f"User: {self.full_name}"
+
+
+class SocialAccount(BaseModel):
+    class Provider(models.TextChoices):
+        GOOGLE = 'GOOGLE', 'Google'
+
+    user = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='social_accounts')
+    provider = models.CharField(max_length=20, choices=Provider.choices)
+    provider_user_id = models.CharField(max_length=255, db_index=True)
+    email = models.EmailField(max_length=255)
+    email_verified = models.BooleanField(default=False)
+    picture_url = models.URLField(max_length=500, blank=True, default='')
+    extra_data = models.JSONField(default=dict, blank=True)
+    last_login_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=['provider', 'provider_user_id'], name='unique_social_provider_user'),
+            models.UniqueConstraint(fields=['user', 'provider'], name='unique_user_provider'),
+        ]
+
+    def __str__(self):
+        return f"{self.provider}:{self.email}"
 
 
 # ═══════════════════════════════════════════════════════════════════
