@@ -1,21 +1,28 @@
+const fs = require('fs');
+const path = require('path');
+
+const sharedSrcGlob = fs.existsSync(path.join(__dirname, 'shared', 'src'))
+  ? './shared/src/**/*.{js,ts,jsx,tsx,mdx}'
+  : '../shared/src/**/*.{js,ts,jsx,tsx,mdx}';
+
 /** @type {import('tailwindcss').Config} */
 module.exports = {
-  content: ['./src/**/*.{js,ts,jsx,tsx,mdx}'],
+  content: ['./src/**/*.{js,ts,jsx,tsx,mdx}', sharedSrcGlob],
   theme: {
     extend: {
       colors: {
         primary: {
-          50: '#FFF7ED',
-          100: '#FFEDD5',
-          200: '#FED7AA',
-          300: '#FDBA74',
-          400: '#FB923C',
-          500: '#F97316',
-          600: '#EA580C',
-          700: '#C2410C',
-          800: '#9A3412',
-          900: '#7C2D12',
-          DEFAULT: '#F97316',
+          50: '#F5F3FF',
+          100: '#EDE9FE',
+          200: '#DDD6FE',
+          300: '#C4B5FD',
+          400: '#A78BFA',
+          500: '#7C3AED',
+          600: '#6D28D9',
+          700: '#5B21B6',
+          800: '#4C1D95',
+          900: '#3B136F',
+          DEFAULT: '#7C3AED',
         },
       },
       fontFamily: {
