@@ -21,16 +21,16 @@ export default function MerchantsPage() {
 
   const { data: merchants = [], isLoading } = useQuery<MerchantRow[]>({
     queryKey: ['admin-merchants', search],
-    queryFn: () => api.get('/admin-panel/merchants/', { params: search ? { search } : {} }).then((r) => r.data),
+    queryFn: () => api.get('/admin/merchants/', { params: search ? { search } : {} }).then((r) => r.data),
   });
 
   const approveMut = useMutation({
-    mutationFn: (id: string) => api.patch(`/admin-panel/merchants/${id}/approve/`),
+    mutationFn: (id: string) => api.patch(`/admin/merchants/${id}/approve/`),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin-merchants'] }),
   });
 
   const rejectMut = useMutation({
-    mutationFn: (id: string) => api.patch(`/admin-panel/merchants/${id}/reject/`),
+    mutationFn: (id: string) => api.patch(`/admin/merchants/${id}/reject/`),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin-merchants'] }),
   });
 
@@ -89,11 +89,8 @@ export default function MerchantsPage() {
         <DataTable
           columns={columns}
           data={merchants}
-          page={1}
-          totalPages={1}
-          onPageChange={() => {}}
-          isLoading={isLoading}
         />
     </DashboardLayout>
   );
 }
+
