@@ -1,7 +1,7 @@
 'use client';
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import Sidebar from '@/components/Sidebar';
+import DashboardLayout from '@/components/DashboardLayout';
 import StatusBadge from '@/components/StatusBadge';
 import api from '@/lib/api';
 import { CheckCircle, XCircle, PackageCheck } from 'lucide-react';
@@ -50,13 +50,13 @@ export default function OrdersPage() {
   const renderOrderCard = (order: OrderRow) => (
     <div key={order.id} className="card flex items-center justify-between">
       <div>
-        <p className="text-white font-medium">#{order.order_number}</p>
-        <p className="text-dark-muted text-xs">
+        <p className="text-gray-900 font-medium">#{order.order_number}</p>
+        <p className="text-gray-500 text-xs">
           {new Date(order.created_at).toLocaleString()} · {order.delivery_mode || '—'}
         </p>
       </div>
       <div className="flex items-center gap-3">
-        <span className="text-white font-semibold">₱{Number(order.total_amount).toLocaleString()}</span>
+        <span className="text-gray-900 font-semibold">₱{Number(order.total_amount).toLocaleString()}</span>
         <StatusBadge status={order.status} />
         {order.status === 'PENDING_MERCHANT' && (
           <div className="flex gap-2">
@@ -90,16 +90,14 @@ export default function OrdersPage() {
   );
 
   return (
-    <div className="flex min-h-screen">
-      <Sidebar />
-      <main className="flex-1 lg:ml-64 p-6">
+    <DashboardLayout>
         <div className="mb-6">
-          <h1 className="text-2xl font-bold text-white">Orders</h1>
-          <p className="text-dark-muted text-sm mt-1">Manage incoming and active orders</p>
+          <h1 className="text-2xl font-bold text-gray-900">Orders</h1>
+          <p className="text-sm text-gray-500 mt-1">Manage incoming and active orders</p>
         </div>
 
         {isLoading ? (
-          <div className="text-dark-muted text-center py-20">Loading orders...</div>
+          <div className="text-gray-500 text-center py-20">Loading orders...</div>
         ) : (
           <div className="space-y-8">
             {/* Pending */}
@@ -140,12 +138,11 @@ export default function OrdersPage() {
               {groupedOrders.completed.length > 0 ? (
                 <div className="space-y-3">{groupedOrders.completed.slice(0, 10).map(renderOrderCard)}</div>
               ) : (
-                <p className="text-dark-muted text-sm">No recent completed orders</p>
+                <p className="text-gray-500 text-sm">No recent completed orders</p>
               )}
             </section>
           </div>
         )}
-      </main>
-    </div>
+    </DashboardLayout>
   );
 }

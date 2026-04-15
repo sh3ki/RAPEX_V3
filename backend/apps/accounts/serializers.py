@@ -67,7 +67,7 @@ class RiderRegistrationSerializer(serializers.Serializer):
 # LOGIN SERIALIZERS
 # ═══════════════════════════════════════════════════════════════════
 class LoginSerializer(serializers.Serializer):
-    phone = serializers.CharField(max_length=20)
+    email = serializers.EmailField()
     password = serializers.CharField(write_only=True)
 
 

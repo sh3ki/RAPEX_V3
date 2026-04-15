@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import Sidebar from '@/components/Sidebar';
+import DashboardLayout from '@/components/DashboardLayout';
 import StatusBadge from '@/components/StatusBadge';
 import api from '@/lib/api';
 import { Plus, Store as StoreIcon, ToggleLeft, ToggleRight } from 'lucide-react';
@@ -45,13 +45,11 @@ export default function StoresPage() {
   });
 
   return (
-    <div className="flex min-h-screen">
-      <Sidebar />
-      <main className="flex-1 lg:ml-64 p-6">
+    <DashboardLayout>
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h1 className="text-2xl font-bold text-white">My Stores</h1>
-            <p className="text-dark-muted text-sm mt-1">Manage up to 4 stores (one per type)</p>
+            <h1 className="text-2xl font-bold text-gray-900">My Stores</h1>
+            <p className="text-sm text-gray-500 mt-1">Manage up to 4 stores (one per type)</p>
           </div>
           {stores.length < 4 && (
             <button className="btn-primary flex items-center gap-2" onClick={() => setShowCreate(true)}>
@@ -61,11 +59,11 @@ export default function StoresPage() {
         </div>
 
         {isLoading ? (
-          <div className="text-dark-muted text-center py-20">Loading stores...</div>
+          <div className="text-gray-500 text-center py-20">Loading stores...</div>
         ) : stores.length === 0 ? (
           <div className="card text-center py-12">
-            <StoreIcon size={48} className="text-dark-muted mx-auto mb-4" />
-            <p className="text-dark-muted">No stores yet. Create your first store to start selling!</p>
+            <StoreIcon size={48} className="text-gray-400 mx-auto mb-4" />
+            <p className="text-gray-500">No stores yet. Create your first store to start selling!</p>
           </div>
         ) : (
           <div className="grid md:grid-cols-2 gap-4">
@@ -73,13 +71,13 @@ export default function StoresPage() {
               <div key={s.id} className="card space-y-4">
                 <div className="flex items-start justify-between">
                   <div>
-                    <h3 className="text-white font-semibold text-lg">{s.display_name}</h3>
+                    <h3 className="text-gray-900 font-semibold text-lg">{s.display_name}</h3>
                     <span className="badge-blue">{s.store_type.replace(/_/g, ' ')}</span>
                   </div>
                   <StatusBadge status={s.is_open ? 'Open' : 'Closed'} />
                 </div>
-                {s.description && <p className="text-dark-muted text-sm">{s.description}</p>}
-                <div className="flex items-center gap-4 text-sm text-dark-muted">
+                {s.description && <p className="text-gray-500 text-sm">{s.description}</p>}
+                <div className="flex items-center gap-4 text-sm text-gray-500">
                   <span>{s.is_accepting_delivery ? '✓ Delivery' : '✗ Delivery'}</span>
                   <span>{s.is_accepting_pickup ? '✓ Pickup' : '✗ Pickup'}</span>
                 </div>
@@ -136,7 +134,6 @@ export default function StoresPage() {
             </div>
           </div>
         )}
-      </main>
-    </div>
+    </DashboardLayout>
   );
 }

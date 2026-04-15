@@ -1,7 +1,7 @@
 'use client';
 import { useQuery } from '@tanstack/react-query';
 import api from '@/lib/api';
-import Sidebar from '@/components/Sidebar';
+import DashboardLayout from '@/components/DashboardLayout';
 import StatCard from '@/components/StatCard';
 import {
   DollarSign, ShoppingCart, Users, Store, Bike, Wallet
@@ -16,28 +16,28 @@ export default function DashboardPage() {
   const { data, isLoading } = useQuery({ queryKey: ['sa-dashboard'], queryFn: fetchDashboard, refetchInterval: 30000 });
 
   return (
-    <div className="flex">
-      <Sidebar />
-      <main className="flex-1 ml-64 p-8">
-        <h2 className="text-2xl font-bold mb-6">Platform Dashboard</h2>
+    <DashboardLayout>
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold text-gray-900">Platform Dashboard</h1>
+        <p className="text-sm text-gray-500 mt-1">Real-time platform overview</p>
+      </div>
 
-        {isLoading ? (
-          <div className="grid grid-cols-3 gap-6">
-            {[...Array(6)].map((_, i) => (
-              <div key={i} className="bg-dark-surface border border-dark-border rounded-xl p-6 h-28 animate-pulse" />
-            ))}
-          </div>
-        ) : (
-          <div className="grid grid-cols-3 gap-6">
-            <StatCard title="Revenue Today" value={`₱${data?.revenue_today || 0}`} icon={<DollarSign size={20} />} />
-            <StatCard title="Active Orders" value={data?.active_orders || 0} icon={<ShoppingCart size={20} />} color="text-secondary" />
-            <StatCard title="Total Users" value={data?.total_users || 0} icon={<Users size={20} />} />
-            <StatCard title="Active Merchants" value={data?.active_merchants || 0} icon={<Store size={20} />} />
-            <StatCard title="Active Riders" value={data?.active_riders || 0} icon={<Bike size={20} />} color="text-green-400" />
-            <StatCard title="Platform Wallet" value={`₱${data?.platform_wallet_total || 0}`} icon={<Wallet size={20} />} color="text-yellow-400" />
-          </div>
-        )}
-      </main>
-    </div>
+      {isLoading ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+          {[...Array(6)].map((_, i) => (
+            <div key={i} className="bg-white border border-gray-200 rounded-xl p-6 h-28 animate-pulse" />
+          ))}
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+          <StatCard title="Revenue Today" value={`₱${Number(data?.revenue_today || 0).toLocaleString()}`} change="+12.5%" trend="up" icon={DollarSign} color="green" />
+          <StatCard title="Active Orders" value={String(data?.active_orders || 0)} change="+8.2%" trend="up" icon={ShoppingCart} color="blue" />
+          <StatCard title="Total Users" value={String(data?.total_users || 0)} change="+5.1%" trend="up" icon={Users} color="primary" />
+          <StatCard title="Active Merchants" value={String(data?.active_merchants || 0)} change="+3.4%" trend="up" icon={Store} color="purple" />
+          <StatCard title="Active Riders" value={String(data?.active_riders || 0)} change="+6.7%" trend="up" icon={Bike} color="green" />
+          <StatCard title="Platform Wallet" value={`₱${Number(data?.platform_wallet_total || 0).toLocaleString()}`} change="+15.3%" trend="up" icon={Wallet} color="primary" />
+        </div>
+      )}
+    </DashboardLayout>
   );
 }

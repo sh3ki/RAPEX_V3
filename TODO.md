@@ -1,12 +1,61 @@
 # RAPEX Technologies OPC — FULL PROJECT TODO
 
 > **Version:** 1.0 MVP  
-> **Status:** Pre-Build  
+> **Status:** In Progress (Reality-Synced Snapshot)  
 > **Track:** Mark each item `[x]` when complete · `[~]` when in-progress
 
 ---
 
-## PHASE 0 — INFRASTRUCTURE SETUP
+## REALITY-SYNCED SNAPSHOT (APRIL 15, 2026)
+
+This snapshot is based on direct scanning of:
+- `backend/apps/*`
+- `backend/config/*`
+- `frontend/*/src/*`
+- `docker-compose.yml`, `backend/Dockerfile`, `frontend/Dockerfile`
+
+### Module Build Status
+
+#### Backend
+- [x] Core foundation is substantially implemented: `core`, `accounts`, `settings_module`
+- [x] Core commerce flow is substantially implemented: `merchant`, `shop`, `fresh_market`, `ready_to_eat`, `preloved`, `orders`, `delivery`, `wallet`
+- [~] Operations modules are implemented but still have gaps: `admin_panel`, `superadmin`, `notifications`, `messaging`, `referrals`, `rider`
+- [~] Risk/compliance modules are partially implemented: `fraud` (models/services/tasks + admin/superadmin access via panel endpoints)
+- [~] Reports are partial: `reports` service exists but full report surface/export matrix is incomplete
+- [ ] Automated tests are effectively not started (test files exist but are empty placeholders)
+
+#### Frontend (Web)
+- [x] All 5 Next.js apps are scaffolded and have route pages + shared API clients
+- [x] Shared frontend package established at `frontend/shared/src` and core role wrappers (Sidebar/TopBar/DashboardLayout/DataTable/status/stat-card) are wired
+- [~] User, Merchant, Rider, Admin, SuperAdmin dashboards are implemented but not yet fully aligned with backend endpoint contracts
+- [~] Major integration pass still pending (endpoint path mismatches, real-time socket path alignment, end-to-end flow validation)
+
+#### Mobile
+- [ ] Not started in this repository snapshot
+
+### Priority TODO (Based on Current Code)
+
+#### P0 — Fix Runtime-Critical Integration/Service Issues
+- [ ] Align admin frontend endpoint prefix with backend (`/api/v1/admin/...` vs `/api/v1/admin-panel/...` in source pages)
+- [ ] Fix wallet service call signatures in admin/superadmin/referrals flows to match `WalletService` and `LoyaltyPointsService` method definitions
+- [ ] Align rider real-time ping socket path/client with actual backend Channels routes
+
+#### P1 — Stabilize Core Backend
+- [ ] Complete referral credit flow with valid points-credit API usage and qualification checks
+- [ ] Finish missing reports endpoints (riders, merchants, exports) and wire to admin/superadmin screens
+- [ ] Add explicit fraud API surface if needed outside `admin_panel` / `superadmin`
+
+#### P2 — Quality + Delivery Readiness
+- [ ] Build test suite for auth, orders, wallet, delivery, and admin operations
+- [ ] Add integration tests for end-to-end order lifecycle and rider wallet/remittance flows
+- [ ] Prepare production compose/deploy readiness checklist (`docker-compose.prod.yml`, hardened env, health checks)
+- [ ] Complete shared component adoption audit so remaining duplicated role-specific UI is either migrated to `frontend/shared/src` or intentionally documented
+
+> Phase markers below are scan-based (`[x]` complete, `[~]` in-progress, `[ ]` not started). Detailed line-items are still being reconciled per module.
+
+---
+
+## [~] PHASE 0 — INFRASTRUCTURE SETUP (40%)
 
 ### 0.1 Server & Domain
 - [ ] Provision Hostinger VPS (Ubuntu 22.04 LTS, recommended 8GB RAM / 4 vCPU)
@@ -64,7 +113,7 @@
 
 ---
 
-## PHASE 1 — BACKEND FOUNDATION
+## [~] PHASE 1 — BACKEND FOUNDATION (78%)
 
 ### 1.1 Django Project Scaffold
 - [ ] Create virtual environment (Python 3.12)
@@ -114,7 +163,7 @@
 
 ---
 
-## PHASE 2 — PLATFORM SETTINGS
+## [~] PHASE 2 — PLATFORM SETTINGS (80%)
 
 ### 2.1 settings_module
 - [ ] `PlatformSetting` model (key-value store with value_type)
@@ -130,7 +179,7 @@
 
 ---
 
-## PHASE 3 — MERCHANT & STORE MODULES
+## [~] PHASE 3 — MERCHANT & STORE MODULES (75%)
 
 ### 3.1 merchant Module
 - [ ] `MerchantStore` model (4 store types, max 1 per type per merchant)
@@ -179,7 +228,7 @@
 
 ---
 
-## PHASE 4 — WALLET MODULE
+## [~] PHASE 4 — WALLET MODULE (78%)
 
 - [ ] `RapexWallet` model (UNIQUE owner_id + owner_type)
 - [ ] `WalletTransaction` model (all transaction types)
@@ -201,7 +250,7 @@
 
 ---
 
-## PHASE 5 — ORDER MODULE
+## [~] PHASE 5 — ORDER MODULE (75%)
 
 - [ ] `Order`, `OrderItem`, `OrderStatusHistory` models
 - [ ] Order state machine: all states + valid transitions (see BLUEPRINT.md Section 9)
@@ -220,7 +269,7 @@
 
 ---
 
-## PHASE 6 — DELIVERY MODULE
+## [~] PHASE 6 — DELIVERY MODULE (72%)
 
 - [ ] `DeliveryFareConfig` model (managed via settings)
 - [ ] `RiderDeliverySession` model (start, pickup, end, GPS track JSON)
@@ -232,7 +281,7 @@
 
 ---
 
-## PHASE 7 — RIDER MODULE
+## [~] PHASE 7 — RIDER MODULE (60%)
 
 - [ ] Rider profile API (GET/PATCH)
 - [ ] Vehicle management API (update vehicle_type, plate, model)
@@ -245,7 +294,7 @@
 
 ---
 
-## PHASE 8 — NOTIFICATIONS MODULE
+## [~] PHASE 8 — NOTIFICATIONS MODULE (68%)
 
 - [ ] `Notification`, `FCMToken` models
 - [ ] Firebase Admin SDK setup (service account from env)
@@ -259,7 +308,7 @@
 
 ---
 
-## PHASE 9 — MESSAGING MODULE
+## [~] PHASE 9 — MESSAGING MODULE (60%)
 
 - [ ] `ChatThread`, `ChatMessage` models
 - [ ] WebSocket consumer: `chat_thread_{thread_id}` group
@@ -272,7 +321,7 @@
 
 ---
 
-## PHASE 10 — REFERRALS MODULE
+## [~] PHASE 10 — REFERRALS MODULE (50%)
 
 - [ ] `ReferralCode`, `ReferralRecord`, `ReferralMonthlyTracker` models
 - [ ] Unique code generation on account approval (6-char alphanumeric + UUID fallback)
@@ -284,7 +333,7 @@
 
 ---
 
-## PHASE 11 — REPORTS MODULE
+## [~] PHASE 11 — REPORTS MODULE (45%)
 
 - [ ] Report aggregation queries: daily/weekly/monthly GMV, orders, commissions, by store type, by rider
 - [ ] `GET /admin/reports/daily/`, `weekly/`, `monthly/`
@@ -297,7 +346,7 @@
 
 ---
 
-## PHASE 12 — FRAUD MODULE
+## [~] PHASE 12 — FRAUD MODULE (55%)
 
 - [ ] `FraudFlag`, `InvestigationCase`, `AccountBlacklist` models
 - [ ] Auto-flagging rules (Celery periodic task):
@@ -313,7 +362,7 @@
 
 ---
 
-## PHASE 13 — ADMIN PANEL MODULE
+## [~] PHASE 13 — ADMIN PANEL MODULE (72%)
 
 - [ ] Admin dashboard stats API
 - [ ] User KYC queue: list pending, approve/reject
@@ -327,7 +376,7 @@
 
 ---
 
-## PHASE 14 — SUPERADMIN MODULE
+## [~] PHASE 14 — SUPERADMIN MODULE (70%)
 
 - [ ] SuperAdmin dashboard aggregated stats API
 - [ ] Admin account CRUD (create/edit/deactivate/role change)
@@ -340,7 +389,7 @@
 
 ---
 
-## PHASE 15 — FRONTEND WEB (5 NEXT.JS APPS)
+## [~] PHASE 15 — FRONTEND WEB (5 NEXT.JS APPS) (65%)
 
 ### SuperAdmin Dashboard (port 3004)
 - [ ] Project scaffold: Next.js 14, TypeScript, Tailwind, TanStack Query, Zustand
@@ -406,7 +455,7 @@
 
 ---
 
-## PHASE 16 — MOBILE APP (React Native / Expo)
+## [ ] PHASE 16 — MOBILE APP (React Native / Expo) (0%)
 
 - [ ] Expo project scaffold (SDK 51, TypeScript, Expo Router 3)
 - [ ] Auth screens (login, register, OTP, role selection)
@@ -424,7 +473,7 @@
 
 ---
 
-## PHASE 17 — INTEGRATION & TESTING
+## [ ] PHASE 17 — INTEGRATION & TESTING (0%)
 
 - [ ] Full end-to-end order flow test (User → Merchant → Rider → Delivered)
 - [ ] Wallet: top-up → remittance deduction → delivery payment → commission
@@ -439,7 +488,7 @@
 
 ---
 
-## PHASE 18 — LAUNCH PREPARATION
+## [ ] PHASE 18 — LAUNCH PREPARATION (0%)
 
 - [ ] All `.env` values set to production values on server
 - [ ] `DEBUG=False` confirmed

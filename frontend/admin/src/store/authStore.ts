@@ -4,6 +4,7 @@ import api from '@/lib/api';
 
 interface User {
   id: string;
+  email: string;
   phone: string;
   first_name: string;
   last_name: string;
@@ -13,7 +14,7 @@ interface User {
 interface AuthState {
   user: User | null;
   isAuthenticated: boolean;
-  login: (phone: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<void>;
   logout: () => void;
   setUser: (user: User) => void;
 }
@@ -21,10 +22,10 @@ interface AuthState {
 export const useAuthStore = create<AuthState>((set) => ({
   user: null,
   isAuthenticated: !!Cookies.get('access_token'),
-  login: async (phone, password) => {
-    const { data } = await api.post('/auth/login/', { phone, password });
-    Cookies.set('access_token', data.tokens.access, { expires: 1 });
-    Cookies.set('refresh_token', data.tokens.refresh, { expires: 7 });
+  login: async (email, password) => {
+    const { data } = await api.post('/auth/token/', { email, password });
+    Cookies.set('access_token', data.access, { expires: 1 });
+    Cookies.set('refresh_token', data.refresh, { expires: 7 });
     set({ user: data.user, isAuthenticated: true });
   },
   logout: () => {

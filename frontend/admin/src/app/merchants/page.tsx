@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import Sidebar from '@/components/Sidebar';
+import DashboardLayout from '@/components/DashboardLayout';
 import DataTable from '@/components/DataTable';
 import StatusBadge from '@/components/StatusBadge';
 import api from '@/lib/api';
@@ -21,16 +21,16 @@ export default function MerchantsPage() {
 
   const { data: merchants = [], isLoading } = useQuery<MerchantRow[]>({
     queryKey: ['admin-merchants', search],
-    queryFn: () => api.get('/admin-panel/merchants/', { params: search ? { search } : {} }).then((r) => r.data),
+    queryFn: () => api.get('/admin/merchants/', { params: search ? { search } : {} }).then((r) => r.data),
   });
 
   const approveMut = useMutation({
-    mutationFn: (id: string) => api.patch(`/admin-panel/merchants/${id}/approve/`),
+    mutationFn: (id: string) => api.patch(`/admin/merchants/${id}/approve/`),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin-merchants'] }),
   });
 
   const rejectMut = useMutation({
-    mutationFn: (id: string) => api.patch(`/admin-panel/merchants/${id}/reject/`),
+    mutationFn: (id: string) => api.patch(`/admin/merchants/${id}/reject/`),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin-merchants'] }),
   });
 
@@ -69,16 +69,14 @@ export default function MerchantsPage() {
   ];
 
   return (
-    <div className="flex min-h-screen">
-      <Sidebar />
-      <main className="flex-1 lg:ml-64 p-6">
+    <DashboardLayout>
         <div className="mb-6">
-          <h1 className="text-2xl font-bold text-white">Merchant Management</h1>
-          <p className="text-dark-muted text-sm mt-1">View merchants and manage KYC approvals</p>
+          <h1 className="text-2xl font-bold text-gray-900">Merchant Management</h1>
+          <p className="text-gray-500 text-sm mt-1">View merchants and manage KYC approvals</p>
         </div>
 
         <div className="relative mb-6 max-w-md">
-          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-dark-muted" />
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
           <input
             type="text"
             className="input pl-10"
@@ -91,12 +89,8 @@ export default function MerchantsPage() {
         <DataTable
           columns={columns}
           data={merchants}
-          page={1}
-          totalPages={1}
-          onPageChange={() => {}}
-          isLoading={isLoading}
         />
-      </main>
-    </div>
+    </DashboardLayout>
   );
 }
+

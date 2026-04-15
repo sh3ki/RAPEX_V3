@@ -1,10 +1,9 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import Sidebar from '@/components/Sidebar';
+import DashboardLayout from '@/components/DashboardLayout';
 import api from '@/lib/api';
-import Cookies from 'js-cookie';
 import { Send, MessageSquare } from 'lucide-react';
 
 interface Thread {
@@ -31,20 +30,20 @@ export default function ChatPage() {
 
   const { data: threads = [] } = useQuery<Thread[]>({
     queryKey: ['admin-chat-threads'],
-    queryFn: () => api.get('/messaging/threads/').then((r) => r.data),
+    queryFn: () => api.get('/chat/threads/').then((r) => r.data),
     refetchInterval: 10_000,
   });
 
   const { data: messages = [] } = useQuery<Message[]>({
     queryKey: ['admin-chat-messages', selectedThread],
-    queryFn: () => api.get(`/messaging/threads/${selectedThread}/messages/`).then((r) => r.data),
+    queryFn: () => api.get(`/chat/threads/${selectedThread}/messages/`).then((r) => r.data),
     enabled: !!selectedThread,
     refetchInterval: 5_000,
   });
 
   const sendMut = useMutation({
     mutationFn: () =>
-      api.post(`/messaging/threads/${selectedThread}/send/`, { body: newMessage, message_type: 'TEXT' }),
+      api.post('/chat/messages/', { thread_id: selectedThread, body: newMessage, message_type: 'TEXT' }),
     onSuccess: () => {
       setNewMessage('');
       queryClient.invalidateQueries({ queryKey: ['admin-chat-messages', selectedThread] });
@@ -59,8 +58,8 @@ export default function ChatPage() {
   // WebSocket connection for real-time
   useEffect(() => {
     if (!selectedThread) return;
-    const token = Cookies.get('access_token');
-    const wsUrl = `ws://localhost:8000/ws/chat/${selectedThread}/?token=${token}`;
+    const wsBase = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8001';
+    const wsUrl = `${wsBase}/ws/chat/${selectedThread}/`;
     const ws = new WebSocket(wsUrl);
 
     ws.onmessage = () => {
@@ -71,29 +70,28 @@ export default function ChatPage() {
   }, [selectedThread, queryClient]);
 
   return (
-    <div className="flex min-h-screen">
-      <Sidebar />
-      <main className="flex-1 lg:ml-64 flex">
+    <DashboardLayout>
+        <div className="flex -m-6 h-[calc(100vh-5rem)]">
         {/* Thread List */}
-        <div className="w-80 border-r border-dark-border h-screen overflow-y-auto bg-dark-surface">
-          <div className="p-4 border-b border-dark-border">
-            <h2 className="text-lg font-semibold text-white flex items-center gap-2">
+        <div className="w-80 border-r border-gray-200 h-full overflow-y-auto bg-white">
+          <div className="p-4 border-b border-gray-200">
+            <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
               <MessageSquare size={20} /> Chats
             </h2>
           </div>
           {threads.length === 0 ? (
-            <p className="text-dark-muted text-sm text-center py-8">No conversations</p>
+            <p className="text-gray-500 text-sm text-center py-8">No conversations</p>
           ) : (
             threads.map((t) => (
               <button
                 key={t.id}
                 onClick={() => setSelectedThread(t.id)}
-                className={`w-full text-left px-4 py-3 border-b border-dark-border/50 hover:bg-dark-bg transition-colors ${
-                  selectedThread === t.id ? 'bg-dark-bg' : ''
+                className={`w-full text-left px-4 py-3 border-b border-gray-100 hover:bg-gray-50 transition-colors ${
+                  selectedThread === t.id ? 'bg-gray-50' : ''
                 }`}
               >
                 <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium text-white">
+                  <span className="text-sm font-medium text-gray-900">
                     {t.participant_role} · {t.participant_id.slice(0, 8)}
                   </span>
                   {t.unread_admin > 0 && (
@@ -102,7 +100,7 @@ export default function ChatPage() {
                     </span>
                   )}
                 </div>
-                <p className="text-xs text-dark-muted mt-1">
+                <p className="text-xs text-gray-500 mt-1">
                   {t.last_message_at ? new Date(t.last_message_at).toLocaleString() : 'No messages'}
                 </p>
               </button>
@@ -111,9 +109,9 @@ export default function ChatPage() {
         </div>
 
         {/* Messages */}
-        <div className="flex-1 flex flex-col h-screen">
+        <div className="flex-1 flex flex-col h-full">
           {!selectedThread ? (
-            <div className="flex-1 flex items-center justify-center text-dark-muted">
+            <div className="flex-1 flex items-center justify-center text-gray-500">
               Select a conversation to start messaging
             </div>
           ) : (
@@ -128,7 +126,7 @@ export default function ChatPage() {
                       className={`max-w-xs px-4 py-2 rounded-2xl text-sm ${
                         m.sender_role === 'ADMIN'
                           ? 'bg-primary text-white rounded-br-md'
-                          : 'bg-dark-surface text-dark-text rounded-bl-md'
+                        : 'bg-gray-100 text-gray-700 rounded-bl-md'
                       }`}
                     >
                       <p>{m.body}</p>
@@ -142,7 +140,7 @@ export default function ChatPage() {
               </div>
 
               {/* Input */}
-              <div className="p-4 border-t border-dark-border bg-dark-surface">
+              <div className="p-4 border-t border-gray-200 bg-white">
                 <form
                   onSubmit={(e) => {
                     e.preventDefault();
@@ -168,7 +166,7 @@ export default function ChatPage() {
             </>
           )}
         </div>
-      </main>
-    </div>
+        </div>
+    </DashboardLayout>
   );
 }

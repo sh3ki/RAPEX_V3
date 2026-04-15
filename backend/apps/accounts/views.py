@@ -79,7 +79,7 @@ class UserRegistrationView(APIView):
             birthday=data.get('birthday'),
             home_address=data.get('home_address', ''),
         )
-        tokens = AuthService.login(data['phone'], data['password'])
+        tokens = AuthService.login_by_user(user)
         return Response(tokens, status=status.HTTP_201_CREATED)
 
 
@@ -101,7 +101,7 @@ class MerchantRegistrationView(APIView):
             business_lat=data.get('business_lat'),
             business_lng=data.get('business_lng'),
         )
-        tokens = AuthService.login(data['phone'], data['password'])
+        tokens = AuthService.login_by_user(user)
         return Response(tokens, status=status.HTTP_201_CREATED)
 
 
@@ -124,7 +124,7 @@ class RiderRegistrationView(APIView):
             vehicle_plate=data.get('vehicle_plate'),
             vehicle_model=data.get('vehicle_model'),
         )
-        tokens = AuthService.login(data['phone'], data['password'])
+        tokens = AuthService.login_by_user(user)
         return Response(tokens, status=status.HTTP_201_CREATED)
 
 
@@ -139,7 +139,7 @@ class LoginView(APIView):
         serializer = LoginSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         result = AuthService.login(
-            phone=serializer.validated_data['phone'],
+            email=serializer.validated_data['email'],
             password=serializer.validated_data['password'],
         )
         return Response(result, status=status.HTTP_200_OK)

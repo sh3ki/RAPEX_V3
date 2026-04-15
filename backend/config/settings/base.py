@@ -173,6 +173,8 @@ CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = 'Asia/Manila'
 CELERY_TASK_TRACK_STARTED = True
 CELERY_TASK_TIME_LIMIT = 300
+from celery.schedules import crontab
+
 CELERY_BEAT_SCHEDULE = {
     'auto-close-stores-by-schedule': {
         'task': 'merchant.auto_close_stores_by_schedule',
@@ -180,13 +182,10 @@ CELERY_BEAT_SCHEDULE = {
     },
     'fresh-market-daily-reset': {
         'task': 'fresh_market.reset_freshness_daily',
-        'schedule': {
-            'hour': 0,
-            'minute': 0,
-        },
+        'schedule': crontab(hour=0, minute=0),
     },
     'mark-overdue-remittance': {
-        'task': 'wallet.mark_overdue_remittance',
+        'task': 'wallet.mark_overdue_remittances',
         'schedule': 60.0 * 60 * 24,  # Daily
     },
     'auto-flag-fraud': {
@@ -248,10 +247,21 @@ SIMPLE_JWT = {
 # ─────────────────────────────────────────────────────────────────────
 CORS_ALLOWED_ORIGINS = config(
     'CORS_ALLOWED_ORIGINS',
-    default='http://localhost:3000,http://localhost:3001,http://localhost:3002,http://localhost:3003,http://localhost:3004',
+    default='http://localhost:3000,http://localhost:3001,http://localhost:3002,http://localhost:3003,http://localhost:3004,http://localhost:3005',
     cast=Csv()
 )
 CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOW_HEADERS = [
+    'accept',
+    'accept-encoding',
+    'authorization',
+    'content-type',
+    'dnt',
+    'origin',
+    'user-agent',
+    'x-csrftoken',
+    'x-requested-with',
+]
 
 # ─────────────────────────────────────────────────────────────────────
 # FILE STORAGE

@@ -226,10 +226,10 @@ class AuthService:
         return user
 
     @staticmethod
-    def login(phone: str, password: str) -> dict:
-        """Authenticate user and return JWT tokens."""
+    def login(email: str, password: str) -> dict:
+        """Authenticate user by email and return JWT tokens."""
         try:
-            user = CustomUser.objects.get(phone=phone)
+            user = CustomUser.objects.get(email=email)
         except CustomUser.DoesNotExist:
             raise RapexAPIException('Invalid credentials.', code='invalid_credentials', status_code=401)
 
@@ -242,17 +242,43 @@ class AuthService:
         # Generate JWT tokens
         refresh = RefreshToken.for_user(user)
         refresh['role'] = user.role
-        refresh['phone'] = user.phone
+        refresh['email'] = user.email
 
         user.last_login = timezone.now()
         user.save(update_fields=['last_login'])
 
-        logger.info(f"User logged in: {phone} ({user.role})")
+        logger.info(f"User logged in: {email} ({user.role})")
         return {
             'access': str(refresh.access_token),
             'refresh': str(refresh),
             'user': {
                 'id': str(user.id),
+                'email': user.email,
+                'phone': user.phone,
+                'role': user.role,
+                'is_verified': user.is_verified,
+            },
+        }
+
+    @staticmethod
+    def login_by_user(user) -> dict:
+        """Generate JWT tokens directly from a user object (used after registration)."""
+        if not user.is_active:
+            raise RapexAPIException('Account is deactivated.', code='account_inactive', status_code=403)
+
+        refresh = RefreshToken.for_user(user)
+        refresh['role'] = user.role
+        refresh['email'] = user.email
+
+        user.last_login = timezone.now()
+        user.save(update_fields=['last_login'])
+
+        return {
+            'access': str(refresh.access_token),
+            'refresh': str(refresh),
+            'user': {
+                'id': str(user.id),
+                'email': user.email,
                 'phone': user.phone,
                 'role': user.role,
                 'is_verified': user.is_verified,

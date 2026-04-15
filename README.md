@@ -240,32 +240,37 @@ Each role has its own Next.js app under `frontend/`:
 
 ```bash
 # User App
-cd frontend/user-app
+cd frontend/user
 npm install
 cp .env.local.example .env.local
 npm run dev      # Starts on port 3000
 
 # Merchant Dashboard
-cd frontend/merchant-dashboard
+cd frontend/merchant
 npm install
 cp .env.local.example .env.local
 npm run dev      # Starts on port 3001
 
 # Rider Dashboard
-cd frontend/rider-dashboard
+cd frontend/rider
 npm install
 npm run dev      # Starts on port 3002
 
 # Admin Dashboard
-cd frontend/admin-dashboard
+cd frontend/admin
 npm install
 npm run dev      # Starts on port 3003
 
 # SuperAdmin Dashboard
-cd frontend/superadmin-dashboard
+cd frontend/superadmin
 npm install
 npm run dev      # Starts on port 3004
 ```
+
+Shared UI rule (mandatory):
+- Build reusable dashboard UI in `frontend/shared/src` first.
+- Role apps consume shared components through `@shared/*` and keep only thin wrappers for role-specific navigation/context.
+- Do not duplicate common components (Sidebar, TopBar, DashboardLayout, DataTable, badges, stat cards, shared form controls) inside role apps.
 
 ### 4. Mobile App (React Native)
 
@@ -412,11 +417,11 @@ rapex-v3/
 │   └── .env.example
 │
 ├── frontend/                       ← All Next.js apps
-│   ├── user-app/                   ← app.rapex.ph
-│   ├── merchant-dashboard/         ← merchant.rapex.ph
-│   ├── rider-dashboard/            ← rider.rapex.ph
-│   ├── admin-dashboard/            ← admin.rapex.ph
-│   ├── superadmin-dashboard/       ← superadmin.rapex.ph
+│   ├── user/                       ← app.rapex.ph
+│   ├── merchant/                   ← merchant.rapex.ph
+│   ├── rider/                      ← rider.rapex.ph
+│   ├── admin/                      ← admin.rapex.ph
+│   ├── superadmin/                 ← superadmin.rapex.ph
 │   └── shared/                     ← Shared components, hooks, utils
 │       ├── components/             ← Apex Dashboard components
 │       ├── hooks/                  ← Custom React hooks
@@ -469,7 +474,7 @@ python manage.py test --verbosity=2
 python manage.py test orders.tests
 
 # Frontend tests
-cd frontend/user-app
+cd frontend/user
 npm run test
 
 # E2E tests (Playwright)
@@ -485,8 +490,8 @@ npx playwright test
 
 ```bash
 # Build Next.js apps
-cd frontend/user-app && npm run build
-cd frontend/merchant-dashboard && npm run build
+cd frontend/user && npm run build
+cd frontend/merchant && npm run build
 # ... repeat for all frontend apps
 
 # Collect Django static files

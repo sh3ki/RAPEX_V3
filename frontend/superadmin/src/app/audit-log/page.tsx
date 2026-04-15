@@ -51,7 +51,7 @@ export default function AuditLogPage() {
           <p className="text-dark-muted text-sm mt-1">Combined SuperAdmin & Admin activity log</p>
         </div>
 
-        <DataTable columns={columns} data={logs} page={1} totalPages={1} onPageChange={() => {}} isLoading={isLoading} />
+        <DataTable columns={columns} data={isLoading ? [] : logs} />
       </main>
     </div>
   );

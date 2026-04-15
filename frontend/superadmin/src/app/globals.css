@@ -3,40 +3,52 @@
 @tailwind utilities;
 
 :root {
-  --primary: #FF6B00;
-  --secondary: #7C3AED;
-  --bg: #0F172A;
-  --surface: #1E293B;
-  --border: #334155;
-  --text: #E2E8F0;
-  --muted: #94A3B8;
+  --primary: #7C3AED;
+  --primary-hover: #6D28D9;
+  --bg: #F9FAFB;
+  --surface: #FFFFFF;
+  --border: #E5E7EB;
+  --text: #111827;
+  --text-secondary: #6B7280;
+  --text-muted: #9CA3AF;
 }
 
 body {
-  @apply bg-dark-bg text-dark-text antialiased;
+  background-color: var(--bg);
+  color: var(--text);
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
 }
 
-/* Apex Dashboard scrollbar */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
-::-webkit-scrollbar-track { background: var(--bg); }
-::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #D1D5DB; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #9CA3AF; }
 
 @layer components {
   .card {
-    @apply bg-dark-surface border border-dark-border rounded-xl p-6;
+    @apply bg-white border border-gray-200 rounded-xl p-6 shadow-sm;
   }
   .input {
-    @apply bg-dark-bg border border-dark-border rounded-lg px-4 py-2 text-dark-text placeholder-dark-muted focus:border-primary-500 focus:ring-1 focus:ring-primary-500 outline-none transition-colors w-full;
+    @apply bg-white border border-gray-300 rounded-lg px-4 py-2.5 text-gray-900 placeholder-gray-400
+           focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 outline-none transition-all w-full text-sm;
   }
   .btn-primary {
-    @apply bg-primary-500 hover:bg-primary-600 text-white font-semibold px-4 py-2 rounded-lg transition-colors;
+    @apply bg-primary-500 hover:bg-primary-600 text-white font-semibold px-4 py-2.5 rounded-lg transition-colors shadow-sm text-sm;
   }
   .btn-secondary {
-    @apply bg-dark-surface hover:bg-dark-border text-dark-text border border-dark-border px-4 py-2 rounded-lg transition-colors;
+    @apply bg-white hover:bg-gray-50 text-gray-700 border border-gray-300 font-medium px-4 py-2.5 rounded-lg transition-colors text-sm;
   }
-  .badge-green { @apply bg-green-500/20 text-green-400 text-xs font-medium px-2 py-0.5 rounded-full; }
-  .badge-yellow { @apply bg-yellow-500/20 text-yellow-400 text-xs font-medium px-2 py-0.5 rounded-full; }
-  .badge-red { @apply bg-red-500/20 text-red-400 text-xs font-medium px-2 py-0.5 rounded-full; }
-  .badge-blue { @apply bg-blue-500/20 text-blue-400 text-xs font-medium px-2 py-0.5 rounded-full; }
+  .badge-green {
+    @apply bg-emerald-50 text-emerald-700 text-xs font-medium px-2.5 py-1 rounded-full;
+  }
+  .badge-yellow {
+    @apply bg-amber-50 text-amber-700 text-xs font-medium px-2.5 py-1 rounded-full;
+  }
+  .badge-red {
+    @apply bg-red-50 text-red-700 text-xs font-medium px-2.5 py-1 rounded-full;
+  }
+  .badge-blue {
+    @apply bg-blue-50 text-blue-700 text-xs font-medium px-2.5 py-1 rounded-full;
+  }
 }

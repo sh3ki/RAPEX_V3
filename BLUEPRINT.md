@@ -62,6 +62,14 @@
 └─────────────┴──────────────┴───────────────┴────────────────────┘
 ```
 
+### Frontend Shared UI Layer (Web)
+
+All web dashboards use a shared component package at `frontend/shared/src`.
+
+- Reusable layout, table, chart, and UI primitives are implemented once in shared.
+- Role apps (`frontend/admin`, `frontend/superadmin`, `frontend/merchant`, `frontend/rider`, `frontend/user`) consume shared components via wrappers/configuration.
+- Common components must not be reimplemented per role app.
+
 ---
 
 ## 2. MODULE MAP
@@ -1261,13 +1269,13 @@ All backend and frontend services run as Docker containers orchestrated by Docke
 │   └───┬────────────┬───────────┬──┘                              │
 │         │              │           │                              │
 │   ┌─────┴───┐   ┌───┴───┐   ┌───┴───────┐                  │
-│   │  gunicorn   │   │  daphne   │   │  user-app   │                  │
+│   │  gunicorn   │   │  daphne   │   │    user     │                  │
 │   │  :8000       │   │  :8001    │   │  :3000      │                  │
 │   │  (Django/WSGI)│   │  (ASGI/WS)│   │  (Next.js)  │                  │
 │   └─────────────┘   └──────────┘   └─────────────┘                  │
 │                                                                          │
 │   ┌─────────────┐  ┌─────────────┐  ┌───────────────┐  ┌────────────┐    │
-│   │merchant-dash│  │ rider-dash  │  │ admin-dash    │  │superadmin  │    │
+│   │  merchant   │  │   rider     │  │    admin      │  │ superadmin │    │
 │   │  :3001       │  │   :3002    │  │   :3003       │  │  :3004     │    │
 │   └─────────────┘  └─────────────┘  └───────────────┘  └────────────┘    │
 │                                                                          │
@@ -1305,11 +1313,11 @@ All backend and frontend services run as Docker containers orchestrated by Docke
 | `pgbouncer` | `edoburu/pgbouncer:latest` | 6432 | Connection pooler |
 | `redis` | `redis:7-alpine` | 6379 | Cache + broker + channel layer |
 | `minio` | `minio/minio:latest` | 9000, 9001 | Object storage (S3-compatible) |
-| `user-app` | `node:20-alpine` (custom) | 3000 | User/Customer Next.js app |
-| `merchant-dashboard` | `node:20-alpine` (custom) | 3001 | Merchant Next.js dashboard |
-| `rider-dashboard` | `node:20-alpine` (custom) | 3002 | Rider Next.js dashboard |
-| `admin-dashboard` | `node:20-alpine` (custom) | 3003 | Admin Next.js dashboard |
-| `superadmin-dashboard` | `node:20-alpine` (custom) | 3004 | SuperAdmin Next.js dashboard |
+| `user` | `node:20-alpine` (custom) | 3000 | User/Customer Next.js app |
+| `merchant` | `node:20-alpine` (custom) | 3001 | Merchant Next.js dashboard |
+| `rider` | `node:20-alpine` (custom) | 3002 | Rider Next.js dashboard |
+| `admin` | `node:20-alpine` (custom) | 3003 | Admin Next.js dashboard |
+| `superadmin` | `node:20-alpine` (custom) | 3004 | SuperAdmin Next.js dashboard |
 
 ### Key Design Decisions
 

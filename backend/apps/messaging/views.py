@@ -80,7 +80,7 @@ class SendMessageView(APIView):
             async_to_sync(channel_layer.group_send)(
                 f"chat_thread_{thread.id}",
                 {
-                    'type': 'chat.message',
+                    'type': 'chat_message',
                     'data': {
                         'id': str(msg.id),
                         'thread_id': str(thread.id),

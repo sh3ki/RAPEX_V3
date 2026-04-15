@@ -193,6 +193,11 @@ All web dashboards across **every role** (SuperAdmin, Admin, Merchant, Rider, Us
 
 Every component, layout pattern, spacing, typography, animation, and interaction from Apex Dashboard is adopted as-is and customized only for RAPEX branding and color theme. This includes:
 
+Implementation rule (web):
+- Reusable UI is built once in `frontend/shared/src` and reused by all role dashboards.
+- Role dashboards keep thin wrappers/config only (sidebar sections, auth wiring, route composition).
+- Shared components are the default for layout, tables, forms, badges, cards, and charts to keep Apex parity consistent across all apps.
+
 | Apex Dashboard Element | Implementation in RAPEX |
 |---|---|
 | **Sidebar navigation** | Per-role sidebar with collapsible sections, icons, active state highlighting |
@@ -214,20 +219,20 @@ Every component, layout pattern, spacing, typography, animation, and interaction
 
 | Color | Hex (Approx.) | Usage |
 |---|---|---|
-| **Orange** | `#FF6B00` | Primary brand — CTA buttons, active nav items, accent borders, highlights |
-| **Purple** | `#7C3AED` | Secondary brand — badges, secondary buttons, chart accents, tags |
+| **Purple (Primary)** | `#7C3AED` | Primary brand — CTA buttons, active nav items, accent borders, highlights |
+| **Violet (Secondary)** | `#A78BFA` | Secondary brand — badges, secondary buttons, chart accents, tags |
 | **White** | `#FFFFFF` | Text on dark backgrounds, card surfaces in dark mode |
 | **Dark BG** | `#0F0F14` | Dark mode background (primary) |
 | **Dark Surface** | `#1A1A24` | Dark mode card/panel background |
 | **Light BG** | `#F5F5F5` | Light mode page background |
 
 ### Theme Modes
-- **Dark Mode** — Default. Dark background with Orange/Purple accents
-- **Light Mode** — Optional. White/light-grey background with Orange/Purple accents
+- **Dark Mode** — Default. Dark background with Purple/Violet accents
+- **Light Mode** — Optional. White/light-grey background with Purple/Violet accents
 - **Customizable** — User can change accent color, sidebar style (expanded/compact/icon-only), and mode from the Apex-style customization panel
 
 ### Mobile App Design (React Native)
-- Same Orange / Purple / White color scheme as web
+- Same Purple / Violet / White color scheme as web
 - Bottom navigation tab bar with icons for fast switching between the 4 shopping platforms
 - Taglish (Tagalog + English) UI copy for accessibility to first-time Filipino app users
 - Fast-action buttons with large tap targets: Accept, Mark Ready, Confirm Pickup, Track, etc.
@@ -562,7 +567,7 @@ Every component, layout pattern, spacing, typography, animation, and interaction
 
 > **Access:** Web Dashboard + React Native Mobile App (Android-first)
 > **Login:** Separate Merchant login page
-> **UI:** Apex Dashboard template (web) — Orange/Purple/White — Taglish-accessible UI (mobile)
+> **UI:** Apex Dashboard template (web) — Purple/Violet/White — Taglish-accessible UI (mobile)
 
 ### Merchant Store Types (The 4 Cores)
 

@@ -6,31 +6,33 @@
     "dev": "next dev -p 3001",
     "build": "next build",
     "start": "next start -p 3001",
-    "lint": "next lint"
+    "typecheck": "tsc --noEmit",
+    "lint": "npm run typecheck"
   },
   "dependencies": {
-    "next": "14.2.15",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "axios": "^1.7.7",
-    "@tanstack/react-query": "^5.56.2",
-    "zustand": "^4.5.5",
-    "lucide-react": "^0.441.0",
+    "@tanstack/react-query": "^5.68.0",
+    "axios": "^1.8.4",
     "clsx": "^2.1.1",
-    "tailwind-merge": "^2.5.2",
-    "date-fns": "^3.6.0",
-    "js-cookie": "^3.0.5"
+    "date-fns": "^4.1.0",
+    "js-cookie": "^3.0.5",
+    "lucide-react": "^0.479.0",
+    "next": "^16.2.3",
+    "rapex-admin": "file:../admin",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "tailwind-merge": "^2.6.0",
+    "zustand": "^5.0.3"
   },
   "devDependencies": {
-    "typescript": "^5.6.2",
-    "@types/react": "^18.3.9",
-    "@types/react-dom": "^18.3.0",
-    "@types/node": "^22.7.0",
     "@types/js-cookie": "^3.0.6",
-    "tailwindcss": "^3.4.12",
-    "postcss": "^8.4.47",
-    "autoprefixer": "^10.4.20",
-    "eslint": "^8.57.0",
-    "eslint-config-next": "14.2.15"
+    "@types/node": "^22.13.10",
+    "@types/react": "^19.0.10",
+    "@types/react-dom": "^19.0.4",
+    "autoprefixer": "^10.4.21",
+    "eslint": "^9.21.0",
+    "eslint-config-next": "^16.2.3",
+    "postcss": "^8.5.3",
+    "tailwindcss": "^3.4.17",
+    "typescript": "^5.8.2"
   }
 }

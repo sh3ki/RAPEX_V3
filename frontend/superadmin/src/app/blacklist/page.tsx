@@ -71,7 +71,7 @@ export default function BlacklistPage() {
           </button>
         </div>
 
-        <DataTable columns={columns} data={entries} page={1} totalPages={1} onPageChange={() => {}} isLoading={isLoading} />
+        <DataTable columns={columns} data={entries} />
 
         {showAdd && (
           <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
@@ -101,3 +101,4 @@ export default function BlacklistPage() {
     </div>
   );
 }
+

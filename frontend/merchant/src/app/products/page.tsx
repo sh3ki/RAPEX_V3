@@ -2,9 +2,9 @@
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import Sidebar from '@/components/Sidebar';
+import DashboardLayout from '@/components/DashboardLayout';
 import api from '@/lib/api';
-import { Plus, Package, Pencil, Trash2 } from 'lucide-react';
+import { Plus, Package } from 'lucide-react';
 
 interface StoreRow { id: string; store_type: string; display_name: string; }
 interface ProductRow { id: string; name: string; base_price: string; final_price: string; is_available: boolean; }
@@ -64,13 +64,11 @@ export default function ProductsPage() {
   });
 
   return (
-    <div className="flex min-h-screen">
-      <Sidebar />
-      <main className="flex-1 lg:ml-64 p-6">
+    <DashboardLayout>
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h1 className="text-2xl font-bold text-white">Products</h1>
-            <p className="text-dark-muted text-sm mt-1">Manage products across your stores</p>
+            <h1 className="text-2xl font-bold text-gray-900">Products</h1>
+            <p className="text-sm text-gray-500 mt-1">Manage products across your stores</p>
           </div>
           {selectedStore && (
             <button className="btn-primary flex items-center gap-2" onClick={() => setShowCreate(true)}>
@@ -88,39 +86,39 @@ export default function ProductsPage() {
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                 selectedStore?.id === s.id
                   ? 'bg-primary text-white'
-                  : 'bg-dark-surface text-dark-muted hover:text-white border border-dark-border'
+                  : 'bg-white border border-gray-200 text-gray-600 hover:text-gray-900'
               }`}
             >
               {s.display_name}
             </button>
           ))}
-          {stores.length === 0 && <p className="text-dark-muted text-sm">No stores. Create a store first.</p>}
+          {stores.length === 0 && <p className="text-gray-500 text-sm">No stores. Create a store first.</p>}
         </div>
 
         {/* Products */}
         {!selectedStore ? (
           <div className="card text-center py-12">
-            <Package size={48} className="text-dark-muted mx-auto mb-4" />
-            <p className="text-dark-muted">Select a store to view its products</p>
+            <Package size={48} className="text-gray-400 mx-auto mb-4" />
+            <p className="text-gray-500">Select a store to view its products</p>
           </div>
         ) : loadingProducts ? (
-          <div className="text-dark-muted text-center py-12">Loading products...</div>
+          <div className="text-gray-500 text-center py-12">Loading products...</div>
         ) : products.length === 0 ? (
           <div className="card text-center py-12">
-            <p className="text-dark-muted">No products yet. Add your first product!</p>
+            <p className="text-gray-500">No products yet. Add your first product!</p>
           </div>
         ) : (
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
             {products.map((p) => (
               <div key={p.id} className="card space-y-3">
                 <div className="flex items-start justify-between">
-                  <h3 className="text-white font-medium">{p.name || (p as any).title}</h3>
+                  <h3 className="text-gray-900 font-medium">{p.name || (p as any).title}</h3>
                   <span className={p.is_available ? 'badge-green' : 'badge-red'}>
                     {p.is_available ? 'Available' : 'Unavailable'}
                   </span>
                 </div>
                 <div className="flex items-center gap-3 text-sm">
-                  <span className="text-dark-muted">Base: ₱{Number(p.base_price || 0).toLocaleString()}</span>
+                  <span className="text-gray-500">Base: ₱{Number(p.base_price || 0).toLocaleString()}</span>
                   <span className="text-primary font-semibold">Final: ₱{Number(p.final_price || p.base_price || 0).toLocaleString()}</span>
                 </div>
               </div>
@@ -132,7 +130,7 @@ export default function ProductsPage() {
         {showCreate && (
           <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
             <div className="card w-full max-w-md space-y-4">
-              <h3 className="text-lg font-semibold text-white">
+              <h3 className="text-lg font-semibold text-gray-900">
                 Add {selectedStore?.store_type === 'PRELOVED' ? 'Item' : 'Product'}
               </h3>
               <input
@@ -169,7 +167,6 @@ export default function ProductsPage() {
             </div>
           </div>
         )}
-      </main>
-    </div>
+    </DashboardLayout>
   );
 }
