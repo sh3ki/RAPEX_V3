@@ -1,7 +1,7 @@
 from django.contrib import admin
 from .models import (
     CustomUser, SuperAdminProfile, AdminProfile,
-    MerchantProfile, RiderProfile, UserProfile, OTPRecord,
+    MerchantProfile, RiderProfile, UserProfile, OTPRecord, SocialAccount,
 )
 
 
@@ -45,3 +45,10 @@ class UserProfileAdmin(admin.ModelAdmin):
 class OTPRecordAdmin(admin.ModelAdmin):
     list_display = ['phone', 'purpose', 'is_used', 'expires_at', 'created_at']
     list_filter = ['purpose', 'is_used']
+
+
+@admin.register(SocialAccount)
+class SocialAccountAdmin(admin.ModelAdmin):
+    list_display = ['provider', 'email', 'email_verified', 'user', 'last_login_at']
+    list_filter = ['provider', 'email_verified']
+    search_fields = ['email', 'provider_user_id', 'user__phone', 'user__email']
