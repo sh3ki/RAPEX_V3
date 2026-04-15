@@ -19,13 +19,13 @@ export default function ReferralsPage() {
 
   const { data: userRefs = [], isLoading: loadingUsers } = useQuery<ReferralRow[]>({
     queryKey: ['admin-referrals-users'],
-    queryFn: () => api.get('/admin-panel/referrals/users/').then((r) => r.data),
+    queryFn: () => api.get('/admin/referrals/users/').then((r) => r.data),
     enabled: activeTab === 'users',
   });
 
   const { data: riderRefs = [], isLoading: loadingRiders } = useQuery<ReferralRow[]>({
     queryKey: ['admin-referrals-riders'],
-    queryFn: () => api.get('/admin-panel/referrals/riders/').then((r) => r.data),
+    queryFn: () => api.get('/admin/referrals/riders/').then((r) => r.data),
     enabled: activeTab === 'riders',
   });
 
@@ -60,11 +60,12 @@ export default function ReferralsPage() {
         </div>
 
         {activeTab === 'users' && (
-          <DataTable columns={columns} data={userRefs} page={1} totalPages={1} onPageChange={() => {}} isLoading={loadingUsers} />
+          <DataTable columns={columns} data={userRefs} />
         )}
         {activeTab === 'riders' && (
-          <DataTable columns={columns} data={riderRefs} page={1} totalPages={1} onPageChange={() => {}} isLoading={loadingRiders} />
+          <DataTable columns={columns} data={riderRefs} />
         )}
     </DashboardLayout>
   );
 }
+
