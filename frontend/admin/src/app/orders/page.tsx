@@ -25,7 +25,7 @@ export default function OrdersPage() {
       // as a proxy until a dedicated admin order list endpoint exists.
       // For now, show a stub that follows the same structure.
       try {
-        const res = await api.get('/admin-panel/reports/daily/');
+        const res = await api.get('/admin/reports/daily/');
         return res.data.orders || [];
       } catch {
         return [];
@@ -65,11 +65,8 @@ export default function OrdersPage() {
         <DataTable
           columns={columns}
           data={orders}
-          page={1}
-          totalPages={1}
-          onPageChange={() => {}}
-          isLoading={isLoading}
         />
     </DashboardLayout>
   );
 }
+
