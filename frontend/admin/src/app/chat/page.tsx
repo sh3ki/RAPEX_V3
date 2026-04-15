@@ -1,10 +1,9 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import DashboardLayout from '@/components/DashboardLayout';
 import api from '@/lib/api';
-import Cookies from 'js-cookie';
 import { Send, MessageSquare } from 'lucide-react';
 
 interface Thread {
@@ -31,20 +30,20 @@ export default function ChatPage() {
 
   const { data: threads = [] } = useQuery<Thread[]>({
     queryKey: ['admin-chat-threads'],
-    queryFn: () => api.get('/messaging/threads/').then((r) => r.data),
+    queryFn: () => api.get('/chat/threads/').then((r) => r.data),
     refetchInterval: 10_000,
   });
 
   const { data: messages = [] } = useQuery<Message[]>({
     queryKey: ['admin-chat-messages', selectedThread],
-    queryFn: () => api.get(`/messaging/threads/${selectedThread}/messages/`).then((r) => r.data),
+    queryFn: () => api.get(`/chat/threads/${selectedThread}/messages/`).then((r) => r.data),
     enabled: !!selectedThread,
     refetchInterval: 5_000,
   });
 
   const sendMut = useMutation({
     mutationFn: () =>
-      api.post(`/messaging/threads/${selectedThread}/send/`, { body: newMessage, message_type: 'TEXT' }),
+      api.post('/chat/messages/', { thread_id: selectedThread, body: newMessage, message_type: 'TEXT' }),
     onSuccess: () => {
       setNewMessage('');
       queryClient.invalidateQueries({ queryKey: ['admin-chat-messages', selectedThread] });
@@ -59,8 +58,8 @@ export default function ChatPage() {
   // WebSocket connection for real-time
   useEffect(() => {
     if (!selectedThread) return;
-    const token = Cookies.get('access_token');
-    const wsUrl = `ws://localhost:8000/ws/chat/${selectedThread}/?token=${token}`;
+    const wsBase = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8001';
+    const wsUrl = `${wsBase}/ws/chat/${selectedThread}/`;
     const ws = new WebSocket(wsUrl);
 
     ws.onmessage = () => {
