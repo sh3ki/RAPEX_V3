@@ -118,6 +118,7 @@ services:
     command: npm run dev
     volumes:
       - ./frontend/user:/app
+      - ./frontend/shared:/app/shared
       - /app/node_modules
     environment:
       NEXT_PUBLIC_API_URL: http://localhost/api/v1
@@ -133,6 +134,7 @@ services:
     command: npm run dev
     volumes:
       - ./frontend/merchant:/app
+      - ./frontend/shared:/app/shared
       - /app/node_modules
     environment:
       NEXT_PUBLIC_API_URL: http://localhost/api/v1
@@ -148,6 +150,7 @@ services:
     command: npm run dev
     volumes:
       - ./frontend/admin:/app
+      - ./frontend/shared:/app/shared
       - /app/node_modules
     environment:
       NEXT_PUBLIC_API_URL: http://localhost/api/v1
@@ -163,6 +166,7 @@ services:
     command: npm run dev
     volumes:
       - ./frontend/superadmin:/app
+      - ./frontend/shared:/app/shared
       - /app/node_modules
     environment:
       NEXT_PUBLIC_API_URL: http://localhost/api/v1
@@ -178,6 +182,7 @@ services:
     command: npm run dev
     volumes:
       - ./frontend/rider:/app
+      - ./frontend/shared:/app/shared
       - /app/node_modules
     environment:
       NEXT_PUBLIC_API_URL: http://localhost/api/v1
