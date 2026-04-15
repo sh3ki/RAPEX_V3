@@ -24,22 +24,22 @@ export default function RidersPage() {
 
   const { data: riders = [], isLoading } = useQuery<RiderRow[]>({
     queryKey: ['admin-riders', search],
-    queryFn: () => api.get('/admin-panel/riders/', { params: search ? { search } : {} }).then((r) => r.data),
+    queryFn: () => api.get('/admin/riders/', { params: search ? { search } : {} }).then((r) => r.data),
   });
 
   const approveMut = useMutation({
-    mutationFn: (id: string) => api.patch(`/admin-panel/riders/${id}/approve/`),
+    mutationFn: (id: string) => api.patch(`/admin/riders/${id}/approve/`),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin-riders'] }),
   });
 
   const rejectMut = useMutation({
-    mutationFn: (id: string) => api.patch(`/admin-panel/riders/${id}/reject/`),
+    mutationFn: (id: string) => api.patch(`/admin/riders/${id}/reject/`),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin-riders'] }),
   });
 
   const walletLoadMut = useMutation({
     mutationFn: ({ id, amount }: { id: string; amount: string }) =>
-      api.post(`/admin-panel/riders/${id}/wallet/load/`, { amount }),
+      api.post(`/admin/riders/${id}/wallet/load/`, { amount }),
     onSuccess: () => {
       setWalletModal(null);
       setWalletAmount('');
@@ -48,7 +48,7 @@ export default function RidersPage() {
   });
 
   const incentiveMut = useMutation({
-    mutationFn: (id: string) => api.patch(`/admin-panel/riders/${id}/incentive/confirm/`),
+    mutationFn: (id: string) => api.patch(`/admin/riders/${id}/incentive/confirm/`),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin-riders'] }),
   });
 
@@ -124,10 +124,6 @@ export default function RidersPage() {
         <DataTable
           columns={columns}
           data={riders}
-          page={1}
-          totalPages={1}
-          onPageChange={() => {}}
-          isLoading={isLoading}
         />
 
         {/* Wallet Load Modal */}
@@ -160,3 +156,4 @@ export default function RidersPage() {
     </DashboardLayout>
   );
 }
+
