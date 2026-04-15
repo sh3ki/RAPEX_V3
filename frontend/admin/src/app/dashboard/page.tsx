@@ -27,7 +27,7 @@ interface DashboardData {
 export default function DashboardPage() {
   const { data, isLoading } = useQuery<DashboardData>({
     queryKey: ['admin-dashboard'],
-    queryFn: () => api.get('/admin-panel/dashboard/').then((r) => r.data),
+    queryFn: () => api.get('/admin/dashboard/').then((r) => r.data),
     refetchInterval: 30_000,
   });
 
