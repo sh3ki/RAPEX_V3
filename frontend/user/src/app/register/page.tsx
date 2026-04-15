@@ -1,86 +1,113 @@
 'use client';
-import { useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import api from '@/lib/api';
 import Link from 'next/link';
+import { useAuthStore } from '@/store/authStore';
+import { renderGoogleButton } from '@/lib/googleIdentity';
 
 export default function RegisterPage() {
   const router = useRouter();
-  const [step, setStep] = useState<'phone' | 'otp' | 'details'>('phone');
+  const signupWithGoogle = useAuthStore((s) => s.signupWithGoogle);
   const [phone, setPhone] = useState('');
-  const [otp, setOtp] = useState('');
-  const [form, setForm] = useState({ first_name: '', last_name: '', password: '', referral_code: '' });
+  const [otpCode, setOtpCode] = useState('');
+  const [fullName, setFullName] = useState('');
   const [error, setError] = useState('');
+  const [otpSent, setOtpSent] = useState(false);
   const [loading, setLoading] = useState(false);
+  const googleButtonRef = useRef<HTMLDivElement | null>(null);
+  const googleClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || '';
 
-  const requestOtp = async (e: React.FormEvent) => {
-    e.preventDefault(); setLoading(true); setError('');
-    try { await api.post('/auth/otp/request/', { phone }); setStep('otp'); }
-    catch { setError('Failed to send OTP'); }
-    finally { setLoading(false); }
-  };
+  const requestOtp = async () => {
+    if (!phone) {
+      setError('Enter your phone number first.');
+      return;
+    }
 
-  const verifyOtp = async (e: React.FormEvent) => {
-    e.preventDefault(); setLoading(true); setError('');
-    try { await api.post('/auth/otp/verify/', { phone, otp }); setStep('details'); }
-    catch { setError('Invalid OTP'); }
-    finally { setLoading(false); }
-  };
-
-  const register = async (e: React.FormEvent) => {
-    e.preventDefault(); setLoading(true); setError('');
+    setLoading(true);
+    setError('');
     try {
-      await api.post('/auth/register/user/', { phone, ...form });
-      router.push('/login');
-    } catch { setError('Registration failed'); }
-    finally { setLoading(false); }
+      await api.post('/auth/otp/request/', { phone, purpose: 'REGISTRATION' });
+      setOtpSent(true);
+    } catch {
+      setError('Failed to send OTP. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
+
+  const handleGoogleCredential = useCallback(
+    async (idToken: string) => {
+      if (!phone || !otpCode) {
+        setError('Phone number and OTP are required before Google signup.');
+        return;
+      }
+
+      setLoading(true);
+      setError('');
+      try {
+        await signupWithGoogle({
+          idToken,
+          role: 'USER',
+          phone,
+          otpCode,
+          fullName,
+        });
+        router.push('/');
+      } catch (err: any) {
+        setError(err?.response?.data?.message || 'Google signup failed.');
+      } finally {
+        setLoading(false);
+      }
+    },
+    [fullName, otpCode, phone, router, signupWithGoogle],
+  );
+
+  useEffect(() => {
+    if (!googleClientId || !googleButtonRef.current) {
+      return;
+    }
+
+    renderGoogleButton(googleButtonRef.current, googleClientId, handleGoogleCredential)
+      .catch(() => setError('Google Sign-Up failed to initialize. Check your client ID setup.'));
+  }, [googleClientId, handleGoogleCredential]);
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-6">
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-primary-500 mb-1">RAPEX</h1>
-          <p className="text-dark-muted text-sm">Create your account</p>
+          <p className="text-dark-muted text-sm">Create your account with Google</p>
         </div>
         {error && <div className="bg-red-500/10 border border-red-500/30 text-red-400 rounded-lg px-4 py-2 text-sm mb-4">{error}</div>}
 
-        {step === 'phone' && (
-          <form onSubmit={requestOtp} className="space-y-4">
-            <div><label className="text-xs text-dark-muted mb-1 block">Phone Number</label>
-              <input className="input" placeholder="08012345678" value={phone} onChange={e => setPhone(e.target.value)} required />
-            </div>
-            <button className="btn-primary w-full" disabled={loading}>{loading ? 'Sending OTP…' : 'Send OTP'}</button>
-          </form>
-        )}
-
-        {step === 'otp' && (
-          <form onSubmit={verifyOtp} className="space-y-4">
-            <p className="text-sm text-dark-muted">Enter the 6-digit code sent to {phone}</p>
-            <input className="input text-center text-2xl tracking-[0.5em]" maxLength={6} placeholder="------" value={otp} onChange={e => setOtp(e.target.value)} required />
-            <button className="btn-primary w-full" disabled={loading}>{loading ? 'Verifying…' : 'Verify OTP'}</button>
-          </form>
-        )}
-
-        {step === 'details' && (
-          <form onSubmit={register} className="space-y-4">
-            <div className="grid grid-cols-2 gap-3">
-              <div><label className="text-xs text-dark-muted mb-1 block">First Name</label>
-                <input className="input" value={form.first_name} onChange={e => setForm(f => ({ ...f, first_name: e.target.value }))} required />
-              </div>
-              <div><label className="text-xs text-dark-muted mb-1 block">Last Name</label>
-                <input className="input" value={form.last_name} onChange={e => setForm(f => ({ ...f, last_name: e.target.value }))} required />
-              </div>
-            </div>
-            <div><label className="text-xs text-dark-muted mb-1 block">Password</label>
-              <input className="input" type="password" value={form.password} onChange={e => setForm(f => ({ ...f, password: e.target.value }))} required />
-            </div>
-            <div><label className="text-xs text-dark-muted mb-1 block">Referral Code (optional)</label>
-              <input className="input" value={form.referral_code} onChange={e => setForm(f => ({ ...f, referral_code: e.target.value }))} />
-            </div>
-            <button className="btn-primary w-full" disabled={loading}>{loading ? 'Creating…' : 'Create Account'}</button>
-          </form>
-        )}
+        <div className="space-y-4">
+          <div>
+            <label className="text-xs text-dark-muted mb-1 block">Full Name (optional)</label>
+            <input className="input" value={fullName} onChange={e => setFullName(e.target.value)} placeholder="Juan Dela Cruz" />
+          </div>
+          <div>
+            <label className="text-xs text-dark-muted mb-1 block">Phone Number</label>
+            <input className="input" placeholder="09171234567" value={phone} onChange={e => setPhone(e.target.value)} required />
+          </div>
+          <div className="flex gap-2">
+            <input
+              className="input flex-1 text-center text-xl tracking-[0.4em]"
+              maxLength={6}
+              placeholder="------"
+              value={otpCode}
+              onChange={e => setOtpCode(e.target.value)}
+              required
+            />
+            <button type="button" className="btn-primary px-4" disabled={loading} onClick={requestOtp}>
+              {loading ? 'Sending...' : otpSent ? 'Resend OTP' : 'Send OTP'}
+            </button>
+          </div>
+          <p className="text-xs text-dark-muted">Enter OTP then continue with Google.</p>
+          <div className="flex justify-center">
+            <div ref={googleButtonRef} />
+          </div>
+        </div>
 
         <p className="text-center text-sm text-dark-muted mt-6">
           Already have an account? <Link href="/login" className="text-primary-500 hover:underline">Sign in</Link>
