@@ -69,4 +69,4 @@ o User must grant location on app open
 o If location or data is turned off during delivery, app prompts to re-enable even shutting off the mobile when mobile re open location will automatically turn on.
 o Order cannot proceed unless location is active
 15. ✅ Front-End UI/UX Design (User App)
- Description: Logo of RAPEX , combination of 3 colors (Orange,Purple,White), easy navigation, Search bar by category,tailored for barangay-level e-commerce.
+ Description: Logo of RAPEX , combination of 3 colors (Purple,Violet,White), easy navigation, Search bar by category,tailored for barangay-level e-commerce.
