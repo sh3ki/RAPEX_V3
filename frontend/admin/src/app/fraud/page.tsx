@@ -34,18 +34,18 @@ export default function FraudPage() {
 
   const { data: flags = [], isLoading: loadingFlags } = useQuery<FlagRow[]>({
     queryKey: ['admin-fraud-flags'],
-    queryFn: () => api.get('/admin-panel/fraud/flags/').then((r) => r.data),
+    queryFn: () => api.get('/admin/fraud/flags/').then((r) => r.data),
     enabled: activeTab === 'flags',
   });
 
   const { data: cases = [], isLoading: loadingCases } = useQuery<CaseRow[]>({
     queryKey: ['admin-fraud-cases'],
-    queryFn: () => api.get('/admin-panel/fraud/cases/').then((r) => r.data),
+    queryFn: () => api.get('/admin/fraud/cases/').then((r) => r.data),
     enabled: activeTab === 'cases',
   });
 
   const createCaseMut = useMutation({
-    mutationFn: () => api.post('/admin-panel/fraud/cases/create/', caseForm),
+    mutationFn: () => api.post('/admin/fraud/cases/create/', caseForm),
     onSuccess: (res) => {
       alert(`Case created: ${res.data.case_number}`);
       setShowCreateCase(false);
@@ -55,7 +55,7 @@ export default function FraudPage() {
   });
 
   const blacklistMut = useMutation({
-    mutationFn: () => api.post('/admin-panel/fraud/blacklist/', blacklistForm),
+    mutationFn: () => api.post('/admin/fraud/blacklist/', blacklistForm),
     onSuccess: () => {
       alert('Account blacklisted');
       setShowBlacklist(false);
@@ -114,10 +114,10 @@ export default function FraudPage() {
         </div>
 
         {activeTab === 'flags' && (
-          <DataTable columns={flagColumns} data={flags} page={1} totalPages={1} onPageChange={() => {}} isLoading={loadingFlags} />
+          <DataTable columns={flagColumns} data={loadingFlags ? [] : flags} />
         )}
         {activeTab === 'cases' && (
-          <DataTable columns={caseColumns} data={cases} page={1} totalPages={1} onPageChange={() => {}} isLoading={loadingCases} />
+          <DataTable columns={caseColumns} data={loadingCases ? [] : cases} />
         )}
 
         {/* Create Case Modal */}
