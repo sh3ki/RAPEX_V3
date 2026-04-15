@@ -21,16 +21,16 @@ export default function UsersPage() {
 
   const { data: users = [], isLoading } = useQuery<UserRow[]>({
     queryKey: ['admin-users', search],
-    queryFn: () => api.get('/admin-panel/users/', { params: search ? { search } : {} }).then((r) => r.data),
+    queryFn: () => api.get('/admin/users/', { params: search ? { search } : {} }).then((r) => r.data),
   });
 
   const approveMut = useMutation({
-    mutationFn: (id: string) => api.patch(`/admin-panel/users/${id}/approve/`),
+    mutationFn: (id: string) => api.patch(`/admin/users/${id}/approve/`),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin-users'] }),
   });
 
   const rejectMut = useMutation({
-    mutationFn: (id: string) => api.patch(`/admin-panel/users/${id}/reject/`),
+    mutationFn: (id: string) => api.patch(`/admin/users/${id}/reject/`),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin-users'] }),
   });
 
@@ -92,11 +92,8 @@ export default function UsersPage() {
         <DataTable
           columns={columns}
           data={users}
-          page={1}
-          totalPages={1}
-          onPageChange={() => {}}
-          isLoading={isLoading}
         />
     </DashboardLayout>
   );
 }
+
