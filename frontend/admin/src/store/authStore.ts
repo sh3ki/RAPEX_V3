@@ -24,9 +24,9 @@ export const useAuthStore = create<AuthState>((set) => ({
   isAuthenticated: !!Cookies.get('access_token'),
   login: async (email, password) => {
     const { data } = await api.post('/auth/token/', { email, password });
-    Cookies.set('access_token', data.data.access, { expires: 1 });
-    Cookies.set('refresh_token', data.data.refresh, { expires: 7 });
-    set({ user: data.data.user, isAuthenticated: true });
+    Cookies.set('access_token', data.access, { expires: 1 });
+    Cookies.set('refresh_token', data.refresh, { expires: 7 });
+    set({ user: data.user, isAuthenticated: true });
   },
   logout: () => {
     Cookies.remove('access_token');
