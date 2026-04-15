@@ -31,20 +31,20 @@ marketplace platform based in the Philippines.
 - Platform: Web (Next.js) + Mobile (React Native / Expo) + Backend (Django)
 
 === 5 ROLES ===
-1. SUPERADMIN — Full platform control. Single account. Uses superadmin-dashboard.
+1. SUPERADMIN — Full platform control. Single account. Uses frontend/superadmin.
 2. ADMIN — Operations team. Multiple sub-roles (Operations, Support, Finance, 
-   Compliance, Logistics). Uses admin-dashboard.
+  Compliance, Logistics). Uses frontend/admin.
 3. MERCHANT — Store owners. Up to 4 store types per merchant:
    - SHOP (retail products — markup-based pricing — tiered)
    - FRESH MARKET (produce by weight/piece/kilo — markup-based — freshness reset daily)
    - READY TO EAT (food menu with variants and add-ons — with prep time)
    - PRE-LOVED (secondhand items — negotiable pricing)
-   Uses merchant-dashboard (web) + merchant screens (mobile).
+  Uses frontend/merchant (web) + merchant screens (mobile).
 4. RIDER — Delivery couriers. Own wallet (must have enough balance = order total 
    before accepting). Vehicle types: Bicycle, Motorcycle, 4-Wheels.
-   Uses rider-dashboard (web) + mobile app.
+  Uses frontend/rider (web) + mobile app.
 5. USER/CUSTOMER — End users. Discovery, ordering, wallet, loyalty points, referrals.
-   Uses user-app (web) + mobile app.
+  Uses frontend/user (web) + mobile app.
 
 === PRICING RULES ===
 Merchant sets base_price. Platform applies markup (tiered by price range). 
@@ -122,9 +122,13 @@ Mobile:
 === UI / DESIGN SYSTEM ===
 Reference URL: https://apex-dashboard.pages.dev/
 - Copy the Apex Dashboard EXACTLY for all web dashboards
+- Use `frontend/shared/src` as the single source of truth for reusable UI
+- Build shared layout/table/chart/form primitives once, then consume them in all 5 role apps
+- In role apps, keep only thin wrappers for role nav config, auth/context wiring, and page composition
+- Never duplicate shared components across role apps (Sidebar, TopBar, DashboardLayout, DataTable, badges, stat cards, common controls)
 - Dark mode is DEFAULT (no light mode toggle for MVP)
-- Primary color: #FF6B00 (RAPEX Orange)
-- Secondary color: #7C3AED (Purple)
+- Primary color: #7C3AED (RAPEX Purple)
+- Secondary color: #A78BFA (Violet)
 - Background: #0F172A (dark navy)
 - Surface/Card: #1E293B
 - Border: #334155
@@ -159,6 +163,7 @@ Reference URL: https://apex-dashboard.pages.dev/
 - All services run via Docker Compose (development: docker compose up, production: docker compose -f docker-compose.prod.yml up -d)
 - backend/Dockerfile uses python:3.12-slim, multi-stage for production
 - docker-compose.yml must include: backend, daphne, celery-worker, celery-beat, postgres, pgbouncer, redis, minio, nginx, 5 Next.js services
+- All 5 Next.js apps must keep `@shared/*` alias and Tailwind scanning for `../shared/src/**/*`
 
 Now wait for my next message with the specific module to build.
 ```
@@ -216,11 +221,12 @@ PHASE 10: Admin + SuperAdmin APIs
   10.2 → superadmin module (platform settings, admin management, ledger)
 
 PHASE 11: Frontend Web (per app)
-  11.1 → superadmin-dashboard (Next.js — Apex UI)
-  11.2 → admin-dashboard (Next.js — Apex UI)
-  11.3 → merchant-dashboard (Next.js — Apex UI)
-  11.4 → rider-dashboard (Next.js — Apex UI)
-  11.5 → user-app (Next.js — Apex UI)
+  11.1 → frontend/shared (shared UI package — REQUIRED before role pages)
+  11.2 → frontend/superadmin (Next.js — Apex UI, consuming shared)
+  11.3 → frontend/admin (Next.js — Apex UI, consuming shared)
+  11.4 → frontend/merchant (Next.js — Apex UI, consuming shared)
+  11.5 → frontend/rider (Next.js — Apex UI, consuming shared)
+  11.6 → frontend/user (Next.js — Apex UI, consuming shared)
 
 PHASE 12: Mobile App
   12.1 → Expo project scaffold + auth screens
@@ -680,7 +686,7 @@ Build the SuperAdmin Dashboard Next.js app for RAPEX.
 
 Reference UI: https://apex-dashboard.pages.dev/ — copy EXACTLY.
 Framework: Next.js 14 App Router, TypeScript, TailwindCSS.
-Colors: #FF6B00 (primary), #7C3AED (secondary), dark mode default.
+Colors: #7C3AED (primary), #A78BFA (secondary), dark mode default.
 
 Port: 3004
 Domain: superadmin.rapex.ph
