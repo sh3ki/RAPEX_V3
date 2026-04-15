@@ -71,6 +71,29 @@ class LoginSerializer(serializers.Serializer):
     password = serializers.CharField(write_only=True)
 
 
+class GoogleLoginSerializer(serializers.Serializer):
+    id_token = serializers.CharField()
+    role = serializers.ChoiceField(
+        choices=['SUPERADMIN', 'ADMIN', 'MERCHANT', 'RIDER', 'USER'],
+        required=False,
+        allow_null=True,
+    )
+
+
+class GoogleSignupSerializer(serializers.Serializer):
+    id_token = serializers.CharField()
+    role = serializers.ChoiceField(choices=['SUPERADMIN', 'ADMIN', 'MERCHANT', 'RIDER', 'USER'])
+    phone = serializers.CharField(max_length=20)
+    otp_code = serializers.CharField(max_length=6, min_length=6)
+    full_name = serializers.CharField(max_length=200, required=False, allow_blank=True)
+    business_name = serializers.CharField(max_length=200, required=False, allow_blank=True)
+    admin_sub_role = serializers.ChoiceField(
+        choices=['OPERATIONS', 'SUPPORT', 'FINANCE', 'COMPLIANCE', 'LOGISTICS'],
+        required=False,
+        allow_null=True,
+    )
+
+
 class TokenRefreshSerializer(serializers.Serializer):
     refresh = serializers.CharField()
 
@@ -85,7 +108,10 @@ class LogoutSerializer(serializers.Serializer):
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = CustomUser
-        fields = ['id', 'phone', 'email', 'role', 'is_active', 'is_verified', 'date_joined']
+        fields = [
+            'id', 'phone', 'email', 'first_name', 'last_name', 'avatar_url',
+            'role', 'is_active', 'is_verified', 'date_joined',
+        ]
         read_only_fields = fields
 
 
