@@ -1,8 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/authStore';
+import Link from 'next/link';
+import { renderGoogleButton } from '@/lib/googleIdentity';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -10,7 +12,40 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const login = useAuthStore((s) => s.login);
+  const loginWithGoogle = useAuthStore((s) => s.loginWithGoogle);
   const router = useRouter();
+  const googleButtonRef = useRef<HTMLDivElement | null>(null);
+  const googleClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || '';
+
+  const handleGoogleCredential = useCallback(
+    async (idToken: string) => {
+      setError('');
+      setLoading(true);
+      try {
+        await loginWithGoogle(idToken, 'MERCHANT');
+        router.push('/dashboard');
+      } catch (err: any) {
+        const code = err?.response?.data?.errors?.code;
+        if (code === 'google_signup_required') {
+          setError('No merchant account is linked to this Google email yet. Please sign up first.');
+        } else {
+          setError(err?.response?.data?.message || 'Google login failed.');
+        }
+      } finally {
+        setLoading(false);
+      }
+    },
+    [loginWithGoogle, router],
+  );
+
+  useEffect(() => {
+    if (!googleClientId || !googleButtonRef.current) {
+      return;
+    }
+
+    renderGoogleButton(googleButtonRef.current, googleClientId, handleGoogleCredential)
+      .catch(() => setError('Google Sign-In failed to initialize. Check your client ID setup.'));
+  }, [googleClientId, handleGoogleCredential]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -50,7 +85,18 @@ export default function LoginPage() {
               className="w-full py-2.5 bg-primary-500 text-white font-semibold rounded-lg hover:bg-primary-600 disabled:opacity-50 transition-colors text-sm">
               {loading ? 'Signing in...' : 'Sign In'}
             </button>
+            <div className="flex items-center gap-2 text-xs text-gray-400">
+              <span className="h-px flex-1 bg-gray-200" />
+              <span>or</span>
+              <span className="h-px flex-1 bg-gray-200" />
+            </div>
+            <div className="flex justify-center">
+              <div ref={googleButtonRef} />
+            </div>
           </form>
+          <p className="text-center text-sm text-gray-500 mt-6">
+            New merchant? <Link href="/register" className="text-primary-500 font-medium hover:underline">Sign up with Google</Link>
+          </p>
         </div>
       </div>
     </div>
