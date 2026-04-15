@@ -11,7 +11,18 @@ api.interceptors.request.use((config) => {
 });
 
 api.interceptors.response.use(
-  (res) => res,
+  (res) => {
+    const payload = res.data;
+    if (
+      payload &&
+      typeof payload === 'object' &&
+      'success' in payload &&
+      'data' in payload
+    ) {
+      return { ...res, data: payload.data };
+    }
+    return res;
+  },
   async (error) => {
     const orig = error.config;
     if (error.response?.status === 401 && !orig._retry) {
@@ -19,9 +30,16 @@ api.interceptors.response.use(
       const refresh = Cookies.get('refresh_token');
       if (refresh) {
         try {
-          const { data } = await axios.post(`${API_URL}/auth/token/refresh/`, { refresh });
-          Cookies.set('access_token', data.access, { expires: 1 });
-          orig.headers.Authorization = `Bearer ${data.access}`;
+          const refreshResponse = await axios.post(`${API_URL}/auth/token/refresh/`, { refresh });
+          const accessToken = refreshResponse.data?.data?.access || refreshResponse.data?.access;
+
+          if (!accessToken) {
+            throw new Error('Missing access token in refresh response');
+          }
+
+          Cookies.set('access_token', accessToken, { expires: 1 });
+          orig.headers = orig.headers || {};
+          orig.headers.Authorization = `Bearer ${accessToken}`;
           return api(orig);
         } catch { Cookies.remove('access_token'); Cookies.remove('refresh_token'); window.location.href = '/login'; }
       } else { window.location.href = '/login'; }
