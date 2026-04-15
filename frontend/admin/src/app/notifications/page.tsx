@@ -1,12 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, type ChangeEvent } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import DashboardLayout from '@/components/DashboardLayout';
 import DataTable from '@/components/DataTable';
 import StatusBadge from '@/components/StatusBadge';
 import api from '@/lib/api';
 import { Send, Bell } from 'lucide-react';
+import type { TableColumn } from '@shared/components/table';
 
 interface NotifRow {
   id: string;
@@ -14,6 +15,10 @@ interface NotifRow {
   recipient_role: string;
   delivery_status: string;
   created_at: string;
+}
+
+interface BroadcastResponse {
+  sent_to: number;
 }
 
 export default function NotificationsPage() {
@@ -24,13 +29,19 @@ export default function NotificationsPage() {
 
   const { data: logs = [], isLoading } = useQuery<NotifRow[]>({
     queryKey: ['admin-notification-log'],
-    queryFn: () => api.get('/admin-panel/notifications/log/').then((r) => r.data),
+    queryFn: async () => {
+      const response = await api.get<NotifRow[]>('/admin/notifications/log/');
+      return response.data;
+    },
   });
 
-  const broadcastMut = useMutation({
-    mutationFn: () => api.post('/admin-panel/notifications/broadcast/', { title, body, roles }),
-    onSuccess: (res) => {
-      alert(`Broadcast sent to ${res.data.sent_to} users`);
+  const broadcastMut = useMutation<BroadcastResponse>({
+    mutationFn: async () => {
+      const response = await api.post<BroadcastResponse>('/admin/notifications/broadcast/', { title, body, roles });
+      return response.data;
+    },
+    onSuccess: (responseData) => {
+      alert(`Broadcast sent to ${responseData.sent_to} users`);
       setShowBroadcast(false);
       setTitle('');
       setBody('');
@@ -38,10 +49,14 @@ export default function NotificationsPage() {
   });
 
   const toggleRole = (role: string) => {
-    setRoles((prev) => (prev.includes(role) ? prev.filter((r) => r !== role) : [...prev, role]));
+    setRoles((previousRoles) => {
+      return previousRoles.includes(role)
+        ? previousRoles.filter((existingRole) => existingRole !== role)
+        : [...previousRoles, role];
+    });
   };
 
-  const columns = [
+  const columns: TableColumn<NotifRow>[] = [
     { key: 'event_type', label: 'Event' },
     { key: 'recipient_role', label: 'Role' },
     {
@@ -69,12 +84,10 @@ export default function NotificationsPage() {
         </div>
 
         <DataTable
+          loading={isLoading}
           columns={columns}
           data={logs}
-          page={1}
-          totalPages={1}
-          onPageChange={() => {}}
-          isLoading={isLoading}
+          selectable={false}
         />
 
         {/* Broadcast Modal */}
@@ -88,14 +101,19 @@ export default function NotificationsPage() {
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm text-gray-500 mb-1">Title</label>
-                  <input className="input" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Announcement title" />
+                  <input
+                    className="input"
+                    value={title}
+                    onChange={(event: ChangeEvent<HTMLInputElement>) => setTitle(event.target.value)}
+                    placeholder="Announcement title"
+                  />
                 </div>
                 <div>
                   <label className="block text-sm text-gray-500 mb-1">Message</label>
                   <textarea
                     className="input h-24 resize-none"
                     value={body}
-                    onChange={(e) => setBody(e.target.value)}
+                    onChange={(event: ChangeEvent<HTMLTextAreaElement>) => setBody(event.target.value)}
                     placeholder="Notification body..."
                   />
                 </div>
@@ -134,3 +152,4 @@ export default function NotificationsPage() {
     </DashboardLayout>
   );
 }
+
