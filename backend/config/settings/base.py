@@ -364,6 +364,8 @@ LOGGING = {
 SEMAPHORE_API_KEY = config('SEMAPHORE_API_KEY', default='')
 SEMAPHORE_SENDER_NAME = config('SEMAPHORE_SENDER_NAME', default='RAPEX')
 GOOGLE_MAPS_API_KEY = config('GOOGLE_MAPS_API_KEY', default='')
+GOOGLE_OAUTH_CLIENT_IDS = config('GOOGLE_OAUTH_CLIENT_IDS', default='', cast=Csv())
+GOOGLE_ALLOW_PRIVILEGED_SIGNUP = config('GOOGLE_ALLOW_PRIVILEGED_SIGNUP', default=False, cast=bool)
 FIREBASE_CREDENTIALS_PATH = config('FIREBASE_CREDENTIALS_PATH', default='')
 
 # ─────────────────────────────────────────────────────────────────────
