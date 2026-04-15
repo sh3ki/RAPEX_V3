@@ -88,10 +88,6 @@ export default function WalletLedgerPage() {
         <DataTable
           columns={columns}
           data={txns}
-          page={1}
-          totalPages={1}
-          onPageChange={() => {}}
-          isLoading={isLoading}
         />
 
         {/* Adjust Modal */}
@@ -152,3 +148,4 @@ export default function WalletLedgerPage() {
     </div>
   );
 }
+
