@@ -65,12 +65,13 @@ RAPEX_V3/
 │   ├── .env.example
 │   └── manage.py
 │
-├── frontend/                         ← 5 Next.js apps (Nx or separate repos)
-│   ├── user-app/                     ← port 3000 — User/Customer
-│   ├── merchant-dashboard/           ← port 3001 — Merchant
-│   ├── rider-dashboard/              ← port 3002 — Rider
-│   ├── admin-dashboard/              ← port 3003 — Admin
-│   └── superadmin-dashboard/         ← port 3004 — SuperAdmin
+├── frontend/                         ← 5 Next.js apps + shared UI package
+│   ├── user/                         ← port 3000 — User/Customer
+│   ├── merchant/                     ← port 3001 — Merchant
+│   ├── rider/                        ← port 3002 — Rider
+│   ├── admin/                        ← port 3003 — Admin
+│   ├── superadmin/                   ← port 3004 — SuperAdmin
+│   └── shared/                       ← cross-role shared components/hooks/types
 │
 ├── mobile/                           ← React Native Expo project
 │   ├── app/                          ← Expo Router file-based routing
@@ -578,10 +579,21 @@ Reference: https://apex-dashboard.pages.dev/
 
 All UI is based on the Apex Dashboard design system. Components are copied exactly — colors, spacing, sidebar layout, card styles, data table styles, modal patterns.
 
+### Shared Component Rule (MANDATORY)
+
+All common dashboard UI must be implemented once in `frontend/shared/src` and consumed by all role apps.
+
+Rules:
+1. Build reusable primitives/layout/table/chart components in `frontend/shared/src/components/*` first.
+2. Role apps (`frontend/admin`, `frontend/superadmin`, `frontend/merchant`, `frontend/rider`, `frontend/user`) should only keep thin wrappers for role-specific navigation, auth context, and page wiring.
+3. Do not duplicate `Sidebar`, `TopBar`, `DashboardLayout`, `DataTable`, badges, stat cards, form controls, or chart wrappers inside role apps.
+4. If behavior differs by role, pass configuration/props (e.g., nav sections, permissions, actions) into shared components rather than forking component code.
+5. Every frontend app must keep `@shared/*` TypeScript path alias and Tailwind content scanning for `../shared/src/**/*`.
+
 **Design tokens:**
 ```css
---color-primary: #FF6B00;        /* Orange */
---color-secondary: #7C3AED;      /* Purple */
+--color-primary: #7C3AED;        /* Purple (Primary) */
+--color-secondary: #A78BFA;      /* Violet (Secondary) */
 --color-background: #0F172A;     /* Dark blue-black (dark mode default) */
 --color-surface: #1E293B;        /* Card background */
 --color-border: #334155;
@@ -594,7 +606,7 @@ All UI is based on the Apex Dashboard design system. Components are copied exact
 ### Folder Structure (per app)
 
 ```
-frontend/user-app/
+frontend/user/
 ├── app/                          ← Next.js App Router
 │   ├── (auth)/
 │   │   ├── login/page.tsx
@@ -609,12 +621,11 @@ frontend/user-app/
 │   │   └── profile/page.tsx
 │   ├── layout.tsx                ← Root layout (fonts, providers)
 │   └── globals.css
-├── components/
-│   ├── ui/                       ← Primitive components (Button, Input, Badge, Modal)
-│   ├── layout/                   ← Sidebar, Topbar, PageHeader
-│   ├── charts/                   ← Dashboard chart wrappers
-│   ├── orders/                   ← Order-specific components
-│   └── wallet/                   ← Wallet-specific components
+├── components/                   ← role-specific wrappers and page-level composition only
+│   ├── Sidebar.tsx               ← wraps shared Sidebar with role nav config
+│   ├── TopBar.tsx                ← wraps shared TopBar with role actions
+│   ├── DashboardLayout.tsx       ← wraps shared DashboardShell
+│   └── ...page-specific components that are not reusable across roles
 ├── lib/
 │   ├── api.ts                    ← Axios instance + interceptors
 │   ├── auth.ts                   ← Auth helpers (token storage, refresh)
@@ -964,8 +975,9 @@ In the relevant Next.js app(s):
 1. Add API call function in `lib/api/[module].ts`
 2. Add React Query hooks in `hooks/use[Module].ts`
 3. Create page under `app/(dashboard)/[module]/page.tsx`
-4. Create components in `components/[module]/`
-5. Add sidebar nav item in `components/layout/Sidebar.tsx`
+4. If UI is reusable across roles, create/update the component in `frontend/shared/src/components/` first.
+5. In role apps, add only thin wrappers/composition in `src/components/` and pass role config into shared components.
+6. Add or update role nav configuration in role `src/components/Sidebar.tsx` wrapper.
 
 ### Step 10: Write Tests
 
@@ -1184,7 +1196,7 @@ class UserProfileFactory(factory.django.DjangoModelFactory):
 ### Frontend Testing (Jest + React Testing Library)
 
 ```bash
-cd frontend/user-app/
+cd frontend/user/
 npm test
 npm run test:coverage
 npm run test:e2e    # Playwright E2E tests
@@ -1510,54 +1522,54 @@ services:
     depends_on: [redis, postgres]
 
   # ─── Next.js Frontends ────────────────────────────
-  user-app:
+  user:
     build:
-      context: ./frontend/user-app
+      context: ./frontend/user
       dockerfile: Dockerfile
     volumes:
-      - ./frontend/user-app:/app
+      - ./frontend/user:/app
       - /app/node_modules
       - /app/.next
-    env_file: ./frontend/user-app/.env.local
+    env_file: ./frontend/user/.env.local
     ports:
       - "3000:3000"
 
-  merchant-dashboard:
+  merchant:
     build:
-      context: ./frontend/merchant-dashboard
+      context: ./frontend/merchant
       dockerfile: Dockerfile
     volumes:
-      - ./frontend/merchant-dashboard:/app
+      - ./frontend/merchant:/app
       - /app/node_modules
     ports:
       - "3001:3001"
 
-  rider-dashboard:
+  rider:
     build:
-      context: ./frontend/rider-dashboard
+      context: ./frontend/rider
       dockerfile: Dockerfile
     volumes:
-      - ./frontend/rider-dashboard:/app
+      - ./frontend/rider:/app
       - /app/node_modules
     ports:
       - "3002:3002"
 
-  admin-dashboard:
+  admin:
     build:
-      context: ./frontend/admin-dashboard
+      context: ./frontend/admin
       dockerfile: Dockerfile
     volumes:
-      - ./frontend/admin-dashboard:/app
+      - ./frontend/admin:/app
       - /app/node_modules
     ports:
       - "3003:3003"
 
-  superadmin-dashboard:
+  superadmin:
     build:
-      context: ./frontend/superadmin-dashboard
+      context: ./frontend/superadmin
       dockerfile: Dockerfile
     volumes:
-      - ./frontend/superadmin-dashboard:/app
+      - ./frontend/superadmin:/app
       - /app/node_modules
     ports:
       - "3004:3004"
