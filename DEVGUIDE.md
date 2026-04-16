@@ -1382,6 +1382,63 @@ All wallet operations use `select_for_update()` inside `transaction.atomic()`. I
 
 ---
 
+## 13. AUTH + MERCHANT ONBOARDING DEV NOTES (APRIL 2026)
+
+### Web Auth Contract (All Role Apps)
+
+- Use `loginWithGoogle(idToken, role)` for primary sign-in.
+- Use `requestMagicLink(email, role, redirectUrl)` and `verifyMagicLink(email, token, role)` as fallback.
+- Do not use password login in role web apps.
+- Keep role names aligned to backend constants: `USER`, `MERCHANT`, `RIDER`, `ADMIN`, `SUPERADMIN`.
+
+### Frontend Auth Store Expectations
+
+Each role app auth store now exposes:
+
+- `loginWithGoogle`
+- `requestMagicLink`
+- `verifyMagicLink`
+- `logout`
+- `setUser`
+
+If a page references removed methods (`login`, `signupWithGoogle`, OTP password registration helpers), refactor it to the magic-link + Google pattern.
+
+### Merchant Onboarding Integration
+
+Required backend endpoints:
+
+- `GET /api/v1/merchant/onboarding/state/`
+- `GET /api/v1/merchant/onboarding/categories/`
+- `GET /api/v1/merchant/onboarding/business-types/?category_id=<uuid>`
+- `POST /api/v1/merchant/onboarding/step/profile/`
+- `POST /api/v1/merchant/onboarding/step/business/`
+- `POST /api/v1/merchant/onboarding/step/location/`
+- `POST /api/v1/merchant/onboarding/step/documents/`
+- `POST /api/v1/merchant/onboarding/send-otp/`
+- `POST /api/v1/merchant/onboarding/submit/`
+
+Frontend behavior requirements:
+
+- Maintain hybrid draft persistence: session storage + backend state.
+- Enforce dashboard route gating for merchant users in pending or incomplete wizard state.
+- Keep legal markdown under `frontend/merchant/public/legal/` and display in onboarding modal flows.
+
+### Seed Data
+
+Run this to populate onboarding catalog and test merchant states:
+
+```bash
+cd backend
+python manage.py seed
+```
+
+Seeder now includes:
+
+- Merchant onboarding business category/type catalog
+- Merchant test accounts with pending and approved states
+
+---
+
 *End of RAPEX Developer Guide — v1.0 MVP*
 
 ---
