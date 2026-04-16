@@ -20,6 +20,7 @@ from .serializers import (
     MerchantOnboardingBusinessStepSerializer,
     MerchantOnboardingLocationStepSerializer,
     MerchantOnboardingDocumentUploadSerializer,
+    MerchantOnboardingProfileImageUploadSerializer,
     MerchantOnboardingDocumentsStepSerializer,
     MerchantOnboardingVerificationStepSerializer,
     MerchantOnboardingStateSerializer,
@@ -142,6 +143,13 @@ class MerchantOnboardingStateView(APIView):
         business_profile = MerchantBusinessProfile.objects.filter(merchant=merchant_profile).first()
         location = MerchantLocation.objects.filter(merchant=merchant_profile).first()
         documents = MerchantDocument.objects.filter(merchant=merchant_profile, is_deleted=False)
+        profile_image_url = request.user.profile_image_url or request.user.avatar_url
+        if profile_image_url and not profile_image_url.startswith('http://') and not profile_image_url.startswith('https://'):
+            resolved_profile_url = default_storage.url(profile_image_url)
+            if resolved_profile_url.startswith('/'):
+                resolved_profile_url = request.build_absolute_uri(resolved_profile_url)
+            profile_image_url = resolved_profile_url
+
         document_payload = MerchantDocumentSerializer(documents, many=True).data
         for item in document_payload:
             stored_path = item.get('file_url')
@@ -166,7 +174,7 @@ class MerchantOnboardingStateView(APIView):
                     'last_name': request.user.last_name,
                     'username': request.user.username,
                     'phone_number': request.user.phone,
-                    'profile_image_url': request.user.profile_image_url or request.user.avatar_url,
+                    'profile_image_url': profile_image_url,
                 },
                 'business': MerchantBusinessProfileSerializer(business_profile).data if business_profile else None,
                 'location': MerchantLocationSerializer(location).data if location else None,
@@ -237,6 +245,31 @@ class MerchantOnboardingDocumentUploadView(APIView):
         return Response(
             {
                 'document_type': serializer.validated_data['document_type'],
+                'file_url': file_url,
+                'storage_path': stored_path,
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class MerchantOnboardingProfileImageUploadView(APIView):
+    permission_classes = [IsAuthenticated, IsMerchant]
+    parser_classes = [MultiPartParser, FormParser]
+
+    def post(self, request):
+        serializer = MerchantOnboardingProfileImageUploadSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        stored_path = MerchantService.upload_profile_image(
+            merchant_profile=request.user.merchantprofile,
+            upload_file=serializer.validated_data['file'],
+        )
+        file_url = default_storage.url(stored_path)
+        if file_url.startswith('/'):
+            file_url = request.build_absolute_uri(file_url)
+
+        return Response(
+            {
                 'file_url': file_url,
                 'storage_path': stored_path,
             },
