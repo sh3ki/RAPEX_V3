@@ -1,7 +1,7 @@
 # RAPEX Technologies OPC — FULL PROJECT PROGRESS TRACKER
 
 > **Last Updated:** April 16, 2026  
-> **Updated By:** GitHub Copilot (codebase scan)  
+> **Updated By:** GitHub Copilot (codebase scan + merchant onboarding null-safety patch)  
 > **Version:** 1.0 MVP  
 > **Overall Progress (estimated from implemented code):** ![59%](https://progress-bar.xyz/59)
 
@@ -69,6 +69,7 @@
 - [x] Core foundations substantially implemented: `core`, `accounts`, `settings_module`
 - [x] Core commerce modules substantially implemented: `merchant`, `orders`, `wallet`, `delivery`
 - [x] Shared web UI layer implemented at `frontend/shared/src` and integrated by role wrappers
+- [x] Merchant onboarding web flow hardened against nullable profile hydration values causing controlled/uncontrolled input warnings and username trim runtime errors
 - [~] Web dashboards implemented but integration still incomplete
 - [ ] Mobile app implementation started
 
@@ -643,8 +644,9 @@
 
 | Date | Note / Blocker | Resolved |
 |---|---|---|
-| 2026-04-16 | Global role auth transition completed to Google + magic-link. Merchant onboarding wizard backend + frontend scaffold completed, with pending route gating active. | Yes |
-| 2026-04-16 | Merchant document step still uses local placeholder file URLs until storage upload integration is finalized. | No |
+| 2026-04-16 | Merchant auth contract updated: login now supports email-or-username + password and Google; signup keeps Google + magic-link with dedicated callback route. | Yes |
+| 2026-04-16 | Merchant onboarding step 1 now enforces required profile image upload, password/confirm password, and country-code phone input. | Yes |
+| 2026-04-16 | Merchant seeding disabled and local/dev merchant accounts purged from DB without recreation. | Yes |
 | | | |
 | | | |
 | | | |
@@ -655,7 +657,7 @@
 
 | Date | Change | Updated By |
 |---|---|---|
-| 2026-04-16 | Added global Google + magic-link auth flow across web roles, merchant onboarding normalized models/API, pending gating, legal draft scaffolding, and seeder updates. | GitHub Copilot |
+| 2026-04-16 | Finalized merchant auth split (password+Google login, magic-link+Google signup), added auth callback route, enforced onboarding step-1 requirements, added profile-image upload API integration, disabled merchant seeding, and deleted existing dev merchants. | GitHub Copilot |
 | | Initial tracker created | |
 | | | |
 
