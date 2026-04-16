@@ -17,6 +17,8 @@ from .serializers import (
     KYCUploadSerializer,
     LoginSerializer,
     LogoutSerializer,
+    MagicLinkRequestSerializer,
+    MagicLinkVerifySerializer,
     MerchantProfileSerializer,
     MerchantRegistrationSerializer,
     OTPRequestSerializer,
@@ -27,8 +29,10 @@ from .serializers import (
     UserProfileSerializer,
     UserRegistrationSerializer,
     AdminProfileSerializer,
+    UsernameAvailabilitySerializer,
 )
-from .services import AuthService, GoogleAuthService, OTPService
+from .services import AuthService, GoogleAuthService, MagicLinkService, OTPService
+from .models import CustomUser
 
 logger = logging.getLogger(__name__)
 
@@ -147,6 +151,36 @@ class LoginView(APIView):
         return Response(result, status=status.HTTP_200_OK)
 
 
+class MagicLinkRequestView(APIView):
+    permission_classes = [AllowAny]
+    throttle_scope = 'auth'
+
+    def post(self, request):
+        serializer = MagicLinkRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        result = MagicLinkService.request_magic_link(
+            email=serializer.validated_data['email'],
+            role=serializer.validated_data['role'],
+            redirect_url=serializer.validated_data.get('redirect_url', ''),
+        )
+        return Response(result, status=status.HTTP_200_OK)
+
+
+class MagicLinkVerifyView(APIView):
+    permission_classes = [AllowAny]
+    throttle_scope = 'auth'
+
+    def post(self, request):
+        serializer = MagicLinkVerifySerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        result = MagicLinkService.verify_magic_link(
+            email=serializer.validated_data['email'],
+            token=serializer.validated_data['token'],
+            role=serializer.validated_data.get('role'),
+        )
+        return Response(result, status=status.HTTP_200_OK)
+
+
 class GoogleLoginView(APIView):
     permission_classes = [AllowAny]
     throttle_scope = 'auth'
@@ -172,8 +206,8 @@ class GoogleSignupView(APIView):
         result = GoogleAuthService.signup(
             id_token=data['id_token'],
             role=data['role'],
-            phone=data['phone'],
-            otp_code=data['otp_code'],
+            phone=data.get('phone'),
+            otp_code=data.get('otp_code'),
             full_name=data.get('full_name', ''),
             extra_data={
                 'business_name': data.get('business_name', ''),
@@ -280,3 +314,14 @@ class KYCUploadView(APIView):
         profile.save()
 
         return Response({'message': 'KYC documents uploaded successfully.'}, status=status.HTTP_200_OK)
+
+
+class UsernameAvailabilityView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        serializer = UsernameAvailabilitySerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        username = serializer.validated_data['username'].strip()
+        available = not CustomUser.objects.filter(username=username).exclude(pk=request.user.pk).exists()
+        return Response({'available': available}, status=status.HTTP_200_OK)
