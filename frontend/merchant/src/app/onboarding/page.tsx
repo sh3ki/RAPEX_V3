@@ -34,6 +34,8 @@ interface OnboardingState {
     email: string;
     username: string;
     phone_number: string;
+    password: string;
+    confirm_password: string;
   };
   business: {
     business_name: string;
@@ -73,6 +75,18 @@ declare global {
 const STORAGE_KEY = 'merchant_onboarding_draft';
 const MAP_PROVIDER = process.env.NEXT_PUBLIC_MAP_PROVIDER || 'leaflet';
 
+const PHONE_COUNTRY_OPTIONS = [
+  { code: '+63', label: 'PH (+63)' },
+  { code: '+1', label: 'US (+1)' },
+  { code: '+65', label: 'SG (+65)' },
+];
+
+const isStrongPassword = (value: string) => {
+  return value.length >= 8 && /[a-z]/.test(value) && /[A-Z]/.test(value) && /[0-9]/.test(value) && /[^A-Za-z0-9]/.test(value);
+};
+
+const asSafeString = (value: unknown) => (typeof value === 'string' ? value : '');
+
 const initialState: OnboardingState = {
   profile: {
     profile_image_url: '',
@@ -82,6 +96,8 @@ const initialState: OnboardingState = {
     email: '',
     username: '',
     phone_number: '',
+    password: '',
+    confirm_password: '',
   },
   business: {
     business_name: '',
@@ -453,10 +469,16 @@ export default function MerchantOnboardingPage() {
   const [showSubmitConfirm, setShowSubmitConfirm] = useState(false);
   const [selfieFaceValid, setSelfieFaceValid] = useState(false);
   const [uploadingDocTypes, setUploadingDocTypes] = useState<string[]>([]);
+  const [profileImageUploading, setProfileImageUploading] = useState(false);
+  const [profileImagePreviewUrl, setProfileImagePreviewUrl] = useState('');
+  const [phoneCountryCode, setPhoneCountryCode] = useState('+63');
+  const [phoneLocalNumber, setPhoneLocalNumber] = useState('');
   const [termsText, setTermsText] = useState('Loading terms...');
   const [privacyText, setPrivacyText] = useState('Loading privacy...');
 
   const stepDocuments = useMemo(() => documentMatrix[formState.business.registration_type], [formState.business.registration_type]);
+  const isGoogleLinked = useMemo(() => Boolean(user?.google_id), [user]);
+  const passwordStrong = useMemo(() => isStrongPassword(formState.profile.password), [formState.profile.password]);
 
   const patchState = useCallback((patch: Partial<OnboardingState>) => {
     setFormState((prev) => {
@@ -496,7 +518,24 @@ export default function MerchantOnboardingPage() {
       try {
         const sessionRaw = typeof window !== 'undefined' ? window.sessionStorage.getItem(STORAGE_KEY) : null;
         if (sessionRaw) {
-          setFormState(JSON.parse(sessionRaw) as OnboardingState);
+          const sessionState = JSON.parse(sessionRaw) as OnboardingState;
+          setFormState((prev) => ({
+            ...prev,
+            ...sessionState,
+            profile: {
+              ...initialState.profile,
+              ...sessionState.profile,
+              profile_image_url: asSafeString(sessionState?.profile?.profile_image_url),
+              first_name: asSafeString(sessionState?.profile?.first_name),
+              middle_name: asSafeString(sessionState?.profile?.middle_name),
+              last_name: asSafeString(sessionState?.profile?.last_name),
+              email: asSafeString(sessionState?.profile?.email),
+              username: asSafeString(sessionState?.profile?.username),
+              phone_number: asSafeString(sessionState?.profile?.phone_number),
+              password: asSafeString(sessionState?.profile?.password),
+              confirm_password: asSafeString(sessionState?.profile?.confirm_password),
+            },
+          }));
         }
 
         const stateResp = await api.get('/merchant/onboarding/state/');
@@ -510,8 +549,15 @@ export default function MerchantOnboardingPage() {
 
         patchState({
           profile: {
-            ...initialState.profile,
-            ...payload.profile,
+            profile_image_url: asSafeString(payload.profile?.profile_image_url),
+            first_name: asSafeString(payload.profile?.first_name),
+            middle_name: asSafeString(payload.profile?.middle_name),
+            last_name: asSafeString(payload.profile?.last_name),
+            email: asSafeString(payload.profile?.email),
+            username: asSafeString(payload.profile?.username),
+            phone_number: asSafeString(payload.profile?.phone_number),
+            password: '',
+            confirm_password: '',
           },
           business: payload.business
             ? {
@@ -544,6 +590,19 @@ export default function MerchantOnboardingPage() {
           },
         });
 
+        const profileImageFromState = payload.profile?.profile_image_url || '';
+        setProfileImagePreviewUrl(profileImageFromState);
+
+        const loadedPhone = String(payload.profile?.phone_number || '');
+        const matchedCountry = PHONE_COUNTRY_OPTIONS.find((option) => loadedPhone.startsWith(option.code));
+        if (matchedCountry) {
+          setPhoneCountryCode(matchedCountry.code);
+          setPhoneLocalNumber(loadedPhone.slice(matchedCountry.code.length).replace(/\D/g, ''));
+        } else {
+          setPhoneCountryCode('+63');
+          setPhoneLocalNumber(loadedPhone.replace(/\D/g, ''));
+        }
+
         if (payload.state?.current_step) {
           setCurrentStep(Math.max(0, Math.min(4, Number(payload.state.current_step) - 1)));
         }
@@ -572,6 +631,13 @@ export default function MerchantOnboardingPage() {
   }, []);
 
   useEffect(() => {
+    if (profileImagePreviewUrl || !formState.profile.profile_image_url) {
+      return;
+    }
+    setProfileImagePreviewUrl(formState.profile.profile_image_url);
+  }, [formState.profile.profile_image_url, profileImagePreviewUrl]);
+
+  useEffect(() => {
     const fetchTypes = async () => {
       if (!formState.business.category_ids.length) {
         setBusinessTypes([]);
@@ -591,7 +657,7 @@ export default function MerchantOnboardingPage() {
   }, [formState.business.category_ids]);
 
   useEffect(() => {
-    const username = formState.profile.username.trim();
+    const username = asSafeString(formState.profile.username).trim();
     if (!username) {
       setUsernameAvailability('unknown');
       return;
@@ -609,6 +675,14 @@ export default function MerchantOnboardingPage() {
 
     return () => window.clearTimeout(timer);
   }, [formState.profile.username]);
+
+  useEffect(() => {
+    const normalizedPhone = `${phoneCountryCode}${phoneLocalNumber}`;
+    if (formState.profile.phone_number === normalizedPhone) {
+      return;
+    }
+    patchNested('profile', { phone_number: normalizedPhone });
+  }, [formState.profile.phone_number, patchNested, phoneCountryCode, phoneLocalNumber]);
 
   useEffect(() => {
     const fetchLegal = async () => {
@@ -686,7 +760,41 @@ export default function MerchantOnboardingPage() {
     [markDocumentUpload, patchNested, upsertDocument],
   );
 
+  const uploadProfileImage = useCallback(
+    async (file: File) => {
+      setProfileImageUploading(true);
+      setError('');
+      try {
+        const formData = new FormData();
+        formData.append('file', file);
+
+        const response = await api.post('/merchant/onboarding/upload-profile-image/', formData, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        });
+
+        const uploadedUrl = response.data?.file_url;
+        const storagePath = response.data?.storage_path || uploadedUrl;
+
+        if (!uploadedUrl || !storagePath) {
+          throw new Error('Upload response missing image URL.');
+        }
+
+        patchNested('profile', { profile_image_url: storagePath });
+        setProfileImagePreviewUrl(uploadedUrl);
+      } catch (err: any) {
+        setError(err?.response?.data?.message || 'Unable to upload profile image.');
+      } finally {
+        setProfileImageUploading(false);
+      }
+    },
+    [patchNested],
+  );
+
   const validateCurrentStep = (): string | null => {
+    if (profileImageUploading) {
+      return 'Please wait for profile image upload to finish.';
+    }
+
     if (uploadingDocTypes.length > 0) {
       return 'Please wait for document uploads to finish.';
     }
@@ -695,6 +803,15 @@ export default function MerchantOnboardingPage() {
       const p = formState.profile;
       if (!p.profile_image_url || !p.first_name || !p.last_name || !p.email || !p.username || !p.phone_number) {
         return 'Please complete all required profile fields.';
+      }
+      if (!p.password || !p.confirm_password) {
+        return 'Password and confirm password are required.';
+      }
+      if (!isStrongPassword(p.password)) {
+        return 'Password must be at least 8 characters and include uppercase, lowercase, number, and special character.';
+      }
+      if (p.password !== p.confirm_password) {
+        return 'Password and confirm password do not match.';
       }
       if (usernameAvailability === 'taken') {
         return 'Username is already taken.';
@@ -860,15 +977,35 @@ export default function MerchantOnboardingPage() {
 
   const renderProfileStep = () => (
     <div className="grid gap-3 md:grid-cols-2">
-      <label className="text-sm text-gray-700 md:col-span-2">
-        Profile image URL *
+      <div className="text-sm text-gray-700 md:col-span-2 rounded-lg border border-gray-300 bg-white p-3">
+        <p className="font-medium text-gray-900">Profile image *</p>
+        <p className="mt-1 text-xs text-gray-500">A clear profile image is required before you can continue.</p>
         <input
-          value={formState.profile.profile_image_url}
-          onChange={(e) => patchNested('profile', { profile_image_url: e.target.value })}
-          className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-          placeholder="https://..."
+          type="file"
+          accept="image/png,image/jpeg,image/webp"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (!file) {
+              return;
+            }
+            const maxSize = 5 * 1024 * 1024;
+            if (file.size > maxSize) {
+              setError('Profile image exceeds 5MB size limit.');
+              return;
+            }
+            void uploadProfileImage(file);
+          }}
+          className="mt-2 block w-full text-sm text-gray-600"
         />
-      </label>
+        {profileImageUploading ? <p className="mt-2 text-xs text-blue-600">Uploading profile image...</p> : null}
+        {profileImagePreviewUrl || formState.profile.profile_image_url ? (
+          <img
+            src={profileImagePreviewUrl || formState.profile.profile_image_url}
+            alt="Profile preview"
+            className="mt-3 h-32 w-32 rounded-lg border border-gray-300 object-cover"
+          />
+        ) : null}
+      </div>
 
       <label className="text-sm text-gray-700">
         First name *
@@ -898,14 +1035,21 @@ export default function MerchantOnboardingPage() {
       </label>
 
       <label className="text-sm text-gray-700">
-        Email * (read-only)
-        <input value={formState.profile.email} readOnly className="mt-1 w-full rounded-lg border border-gray-200 bg-gray-100 px-3 py-2 text-sm" />
+        Email * {isGoogleLinked ? '(read-only for Google-linked account)' : ''}
+        <input
+          value={formState.profile.email}
+          readOnly={isGoogleLinked}
+          onChange={(e) => patchNested('profile', { email: e.target.value })}
+          className={`mt-1 w-full rounded-lg px-3 py-2 text-sm ${
+            isGoogleLinked ? 'border border-gray-200 bg-gray-100' : 'border border-gray-300'
+          }`}
+        />
       </label>
 
       <label className="text-sm text-gray-700">
         Username *
         <input
-          value={formState.profile.username}
+          value={asSafeString(formState.profile.username)}
           onChange={(e) => patchNested('profile', { username: e.target.value })}
           className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
         />
@@ -922,12 +1066,60 @@ export default function MerchantOnboardingPage() {
 
       <label className="text-sm text-gray-700">
         Phone number *
+        <div className="mt-1 flex gap-2">
+          <select
+            value={phoneCountryCode}
+            onChange={(e) => setPhoneCountryCode(e.target.value)}
+            className="w-32 rounded-lg border border-gray-300 px-2 py-2 text-sm"
+          >
+            {PHONE_COUNTRY_OPTIONS.map((option) => (
+              <option key={option.code} value={option.code}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+          <input
+            value={phoneLocalNumber}
+            onChange={(e) => setPhoneLocalNumber(e.target.value.replace(/\D/g, '').slice(0, 15))}
+            className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm"
+            placeholder="9123456789"
+          />
+        </div>
+      </label>
+
+      <label className="text-sm text-gray-700">
+        Password *
         <input
-          value={formState.profile.phone_number}
-          onChange={(e) => patchNested('profile', { phone_number: e.target.value.replace(/[^0-9+]/g, '') })}
+          type="password"
+          value={formState.profile.password}
+          onChange={(e) => patchNested('profile', { password: e.target.value })}
           className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-          placeholder="+639123456789"
+          placeholder="At least 8 chars, upper/lower/number/special"
         />
+        <span className={`mt-1 block text-xs ${passwordStrong ? 'text-emerald-600' : 'text-gray-500'}`}>
+          {passwordStrong
+            ? 'Password meets complexity requirements.'
+            : 'Password must include uppercase, lowercase, number, and special character.'}
+        </span>
+      </label>
+
+      <label className="text-sm text-gray-700">
+        Confirm password *
+        <input
+          type="password"
+          value={formState.profile.confirm_password}
+          onChange={(e) => patchNested('profile', { confirm_password: e.target.value })}
+          className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+        />
+        <span className={`mt-1 block text-xs ${
+          formState.profile.confirm_password && formState.profile.confirm_password !== formState.profile.password
+            ? 'text-red-600'
+            : 'text-gray-500'
+        }`}>
+          {formState.profile.confirm_password && formState.profile.confirm_password !== formState.profile.password
+            ? 'Passwords do not match.'
+            : 'Re-enter your password to confirm.'}
+        </span>
       </label>
     </div>
   );
