@@ -9,6 +9,7 @@ interface User {
   username?: string | null;
   first_name: string;
   last_name: string;
+  google_id?: string | null;
   role: string;
   status?: string;
   wizard_completed?: boolean;
@@ -17,6 +18,7 @@ interface User {
 interface AuthState {
   user: User | null;
   isAuthenticated: boolean;
+  loginWithPassword: (identifier: string, password: string, role?: string) => Promise<void>;
   loginWithGoogle: (idToken: string, role?: string) => Promise<void>;
   requestMagicLink: (email: string, role?: string, redirectUrl?: string) => Promise<{ debugLink?: string }>;
   verifyMagicLink: (email: string, token: string, role?: string) => Promise<void>;
@@ -57,6 +59,14 @@ const persistUser = (user: User | null) => {
 export const useAuthStore = create<AuthState>((set) => ({
   user: readStoredUser(),
   isAuthenticated: !!Cookies.get('access_token'),
+  loginWithPassword: async (identifier, password, role = 'MERCHANT') => {
+    const { data } = await api.post('/auth/token/', { identifier, password, role });
+    const payload = extractAuthPayload(data);
+    Cookies.set('access_token', payload.access, { expires: 1 });
+    Cookies.set('refresh_token', payload.refresh, { expires: 7 });
+    persistUser(payload.user);
+    set({ user: payload.user, isAuthenticated: true });
+  },
   loginWithGoogle: async (idToken, role = 'MERCHANT') => {
     const { data } = await api.post('/auth/google/login/', { id_token: idToken, role });
     const payload = extractAuthPayload(data);
@@ -69,7 +79,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     const { data } = await api.post('/auth/magic-link/request/', {
       email,
       role,
-      redirect_url: redirectUrl || `${window.location.origin}/login`,
+      redirect_url: redirectUrl || `${window.location.origin}/auth/callback`,
     });
     const payload = extractAuthPayload(data);
     return { debugLink: payload.debug_magic_link };
