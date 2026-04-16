@@ -1,9 +1,9 @@
 # RAPEX Technologies OPC — FULL PROJECT PROGRESS TRACKER
 
-> **Last Updated:** April 15, 2026  
+> **Last Updated:** April 16, 2026  
 > **Updated By:** GitHub Copilot (codebase scan)  
 > **Version:** 1.0 MVP  
-> **Overall Progress (estimated from implemented code):** ![56%](https://progress-bar.xyz/56)
+> **Overall Progress (estimated from implemented code):** ![59%](https://progress-bar.xyz/59)
 
 ---
 
@@ -40,7 +40,7 @@
 | Phase 16 | Mobile App | 24 | 0 | 0 | 0% |
 | Phase 17 | Integration & QA | 14 | 0 | 0 | 0% |
 | Phase 18 | Launch Prep | 18 | 0 | 0 | 0% |
-| **TOTAL** | **All** | **378** | **211** | **70** | **56%** |
+| **TOTAL** | **All** | **378** | **224** | **67** | **59%** |
 
 ---
 
@@ -643,6 +643,8 @@
 
 | Date | Note / Blocker | Resolved |
 |---|---|---|
+| 2026-04-16 | Global role auth transition completed to Google + magic-link. Merchant onboarding wizard backend + frontend scaffold completed, with pending route gating active. | Yes |
+| 2026-04-16 | Merchant document step still uses local placeholder file URLs until storage upload integration is finalized. | No |
 | | | |
 | | | |
 | | | |
@@ -653,6 +655,7 @@
 
 | Date | Change | Updated By |
 |---|---|---|
+| 2026-04-16 | Added global Google + magic-link auth flow across web roles, merchant onboarding normalized models/API, pending gating, legal draft scaffolding, and seeder updates. | GitHub Copilot |
 | | Initial tracker created | |
 | | | |
 
