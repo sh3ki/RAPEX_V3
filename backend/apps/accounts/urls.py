@@ -17,6 +17,8 @@ urlpatterns = [
 
     # Token / Login
     path('token/', views.LoginView.as_view(), name='token-login'),
+    path('magic-link/request/', views.MagicLinkRequestView.as_view(), name='magic-link-request'),
+    path('magic-link/verify/', views.MagicLinkVerifyView.as_view(), name='magic-link-verify'),
     path('google/login/', views.GoogleLoginView.as_view(), name='google-login'),
     path('google/signup/', views.GoogleSignupView.as_view(), name='google-signup'),
     path('token/refresh/', views.TokenRefreshView.as_view(), name='token-refresh'),
@@ -31,4 +33,5 @@ urlpatterns = [
 
     # KYC Upload
     path('kyc/upload/', views.KYCUploadView.as_view(), name='kyc-upload'),
+    path('username/check/', views.UsernameAvailabilityView.as_view(), name='username-check'),
 ]
