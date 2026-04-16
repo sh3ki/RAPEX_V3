@@ -1386,22 +1386,24 @@ All wallet operations use `select_for_update()` inside `transaction.atomic()`. I
 
 ### Web Auth Contract (All Role Apps)
 
-- Use `loginWithGoogle(idToken, role)` for primary sign-in.
-- Use `requestMagicLink(email, role, redirectUrl)` and `verifyMagicLink(email, token, role)` as fallback.
-- Do not use password login in role web apps.
+- User, Rider, Admin, and SuperAdmin web apps use Google + magic-link auth.
+- Merchant web app login must support `email-or-username + password` and Google.
+- Merchant web app signup must keep magic-link and Google.
+- Use `requestMagicLink(email, role, redirectUrl)` and `verifyMagicLink(email, token, role)` via a dedicated callback route.
 - Keep role names aligned to backend constants: `USER`, `MERCHANT`, `RIDER`, `ADMIN`, `SUPERADMIN`.
 
 ### Frontend Auth Store Expectations
 
 Each role app auth store now exposes:
 
+- `loginWithPassword` (merchant app)
 - `loginWithGoogle`
 - `requestMagicLink`
 - `verifyMagicLink`
 - `logout`
 - `setUser`
 
-If a page references removed methods (`login`, `signupWithGoogle`, OTP password registration helpers), refactor it to the magic-link + Google pattern.
+If a page references removed methods (`login`, `signupWithGoogle`, OTP password registration helpers), refactor it to the current role contract.
 
 ### Merchant Onboarding Integration
 
@@ -1410,6 +1412,8 @@ Required backend endpoints:
 - `GET /api/v1/merchant/onboarding/state/`
 - `GET /api/v1/merchant/onboarding/categories/`
 - `GET /api/v1/merchant/onboarding/business-types/?category_id=<uuid>`
+- `POST /api/v1/merchant/onboarding/upload-profile-image/`
+- `POST /api/v1/merchant/onboarding/upload-document/`
 - `POST /api/v1/merchant/onboarding/step/profile/`
 - `POST /api/v1/merchant/onboarding/step/business/`
 - `POST /api/v1/merchant/onboarding/step/location/`
@@ -1422,10 +1426,12 @@ Frontend behavior requirements:
 - Maintain hybrid draft persistence: session storage + backend state.
 - Enforce dashboard route gating for merchant users in pending or incomplete wizard state.
 - Keep legal markdown under `frontend/merchant/public/legal/` and display in onboarding modal flows.
+- Enforce step-1 required fields: profile image upload, password + confirm password, username availability, and country-code phone input.
+- Keep onboarding email editable only for non-Google-linked merchant users.
 
 ### Seed Data
 
-Run this to populate onboarding catalog and test merchant states:
+Run this to populate shared platform defaults and onboarding catalog:
 
 ```bash
 cd backend
@@ -1435,7 +1441,7 @@ python manage.py seed
 Seeder now includes:
 
 - Merchant onboarding business category/type catalog
-- Merchant test accounts with pending and approved states
+- Merchant account seeding is intentionally disabled
 
 ---
 
