@@ -563,6 +563,22 @@ sudo systemctl restart nginx
 
 ---
 
+## Auth and Merchant Onboarding Update (April 2026)
+
+- Global web auth now uses Google OAuth as the primary path with email magic-link fallback for all five roles.
+- Backend auth now supports identity merge-by-email, role mismatch guarding, and role-aware auto-provision on magic-link verification.
+- Merchant onboarding is normalized into dedicated models:
+  - Merchant business categories and business types
+  - Merchant business profile
+  - Merchant location
+  - Merchant documents
+  - Merchant onboarding state
+- Merchant flow now uses a 5-step wizard with draft persistence (session + backend state), OTP verification (email + phone), legal acknowledgments, and final submit-to-pending flow.
+- Merchant dashboard access is gated until onboarding is complete and account status is approved.
+- Seed command now includes onboarding business category/type catalog and merchant test states, including pending and approved merchants.
+
+---
+
 ## Platform Quick Reference
 
 | Item | Value |
