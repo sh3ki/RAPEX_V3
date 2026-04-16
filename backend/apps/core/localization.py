@@ -18,7 +18,10 @@ MESSAGES = {
         'auth.magic_link.sent': 'Magic login link sent to your email.',
         'auth.magic_link.invalid': 'This magic link is invalid or has expired.',
         'auth.magic_link.login_success': 'Signed in via magic link successfully.',
+        'auth.magic_link.signup_only': 'Magic-link signup is only available for emails that do not have an account yet.',
         'auth.password.disabled': 'Password login is disabled. Please continue with Google or email magic link.',
+        'auth.password.invalid': 'Invalid credentials. Please check your email or username and password.',
+        'auth.password.login_success': 'Signed in with password successfully.',
         'auth.account.inactive': 'Account is deactivated.',
         'auth.signup_required': 'No account is linked to this Google email. Please continue with email magic link or Google signup.',
     }
