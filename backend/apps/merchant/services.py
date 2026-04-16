@@ -2,9 +2,11 @@
 import logging
 import math
 import os
+import re
 import uuid
 from decimal import Decimal
 
+from django.core.files.storage import default_storage
 from django.db import transaction
 from django.db.models import F, FloatField, Value
 from django.db.models.functions import ACos, Cos, Radians, Sin
@@ -31,6 +33,17 @@ MAX_STORES = 4
 
 
 class MerchantService:
+    PASSWORD_COMPLEXITY_RE = re.compile(r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^\w\s]).{8,}$')
+
+    @staticmethod
+    def _validate_password_strength(password: str):
+        if not MerchantService.PASSWORD_COMPLEXITY_RE.match(password):
+            raise RapexAPIException(
+                'Password must be at least 8 characters and include uppercase, lowercase, number, and special character.',
+                code='weak_password',
+                status_code=400,
+            )
+
     @staticmethod
     def create_store(merchant, store_type: str, data: dict) -> MerchantStore:
         """Create a store, enforcing max-store and uniqueness limits."""
@@ -122,6 +135,19 @@ class MerchantService:
         return stored_path
 
     @staticmethod
+    def upload_profile_image(merchant_profile, upload_file):
+        state = MerchantService.get_or_create_onboarding_state(merchant_profile)
+        MerchantService._assert_onboarding_editable(state)
+
+        original_name = get_valid_filename(upload_file.name or 'profile-image')
+        _, extension = os.path.splitext(original_name)
+        extension = (extension or '').lower()
+
+        path = f"merchant-onboarding/{merchant_profile.id}/profile-image-{uuid.uuid4().hex}{extension}"
+        stored_path = default_storage.save(path, upload_file)
+        return stored_path
+
+    @staticmethod
     @transaction.atomic
     def save_profile_step(merchant_profile, validated_data: dict):
         state = MerchantService.get_or_create_onboarding_state(merchant_profile)
@@ -130,6 +156,13 @@ class MerchantService:
         user = merchant_profile.user
         username = validated_data['username'].strip()
         phone_number = validated_data['phone_number'].strip()
+        password = validated_data['password']
+        confirm_password = validated_data['confirm_password']
+        submitted_email = validated_data['email'].strip().lower()
+
+        if password != confirm_password:
+            raise RapexAPIException('Password and confirm password do not match.', code='password_mismatch', status_code=400)
+        MerchantService._validate_password_strength(password)
 
         if CustomUser.objects.filter(username=username).exclude(pk=user.pk).exists():
             raise RapexAPIException('Username already exists.', code='username_exists', status_code=409)
@@ -137,18 +170,22 @@ class MerchantService:
         if CustomUser.objects.filter(phone=phone_number).exclude(pk=user.pk).exists():
             raise RapexAPIException('Phone number already exists.', code='phone_exists', status_code=409)
 
-        if user.email and validated_data['email'].lower() != user.email.lower():
-            raise RapexAPIException('Email cannot be edited for this account.', code='email_readonly', status_code=400)
+        if user.google_id and user.email and submitted_email != user.email.lower():
+            raise RapexAPIException('Email cannot be edited for Google-linked accounts.', code='email_readonly', status_code=400)
+        if user.email != submitted_email and CustomUser.objects.filter(email__iexact=submitted_email).exclude(pk=user.pk).exists():
+            raise RapexAPIException('Email already exists.', code='email_exists', status_code=409)
 
         user.first_name = validated_data['first_name'].strip()
         user.last_name = validated_data['last_name'].strip()
         user.username = username
         user.phone = phone_number
+        user.email = submitted_email
         image_url = validated_data.get('profile_image_url', '').strip()
         if image_url:
             user.avatar_url = image_url
             user.profile_image_url = image_url
-        user.save(update_fields=['first_name', 'last_name', 'username', 'phone', 'avatar_url', 'profile_image_url'])
+        user.set_password(password)
+        user.save(update_fields=['first_name', 'last_name', 'username', 'phone', 'email', 'password', 'avatar_url', 'profile_image_url'])
 
         middle_name = validated_data.get('middle_name', '').strip()
         merchant_profile.full_name = ' '.join(
