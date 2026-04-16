@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { renderGoogleButton } from '@/lib/googleIdentity';
 import { useAuthStore } from '@/store/authStore';
@@ -11,11 +11,9 @@ const t = authText('en');
 
 export default function RegisterPage() {
   const router = useRouter();
-  const params = useSearchParams();
   const user = useAuthStore((s) => s.user);
   const loginWithGoogle = useAuthStore((s) => s.loginWithGoogle);
   const requestMagicLink = useAuthStore((s) => s.requestMagicLink);
-  const verifyMagicLink = useAuthStore((s) => s.verifyMagicLink);
 
   const [email, setEmail] = useState('');
   const [info, setInfo] = useState('');
@@ -57,7 +55,7 @@ export default function RegisterPage() {
     setError('');
     setInfo('');
     try {
-      const result = await requestMagicLink(email, 'RIDER', `${window.location.origin}/register`);
+      const result = await requestMagicLink(email, 'RIDER', `${window.location.origin}/auth/callback`);
       setInfo(t.magicLinkSent);
       if (result.debugLink) {
         setInfo(`${t.magicLinkSent} Dev link: ${result.debugLink}`);
@@ -68,40 +66,6 @@ export default function RegisterPage() {
       setLoading(false);
     }
   };
-
-  useEffect(() => {
-    const token = params.get('token');
-    const magicEmail = params.get('email');
-    const role = params.get('role') || 'RIDER';
-    if (!token || !magicEmail) {
-      return;
-    }
-
-    let isMounted = true;
-    const run = async () => {
-      setLoading(true);
-      setError('');
-      try {
-        await verifyMagicLink(magicEmail, token, role);
-        if (isMounted) {
-          router.replace('/orders');
-        }
-      } catch (err: any) {
-        if (isMounted) {
-          setError(err?.response?.data?.message || t.magicLinkVerifyFailed);
-        }
-      } finally {
-        if (isMounted) {
-          setLoading(false);
-        }
-      }
-    };
-
-    void run();
-    return () => {
-      isMounted = false;
-    };
-  }, [params, router, verifyMagicLink]);
 
   useEffect(() => {
     if (!googleClientId || !googleButtonRef.current) {
@@ -125,8 +89,8 @@ export default function RegisterPage() {
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
           <div className="w-14 h-14 rounded-2xl bg-primary-500 flex items-center justify-center text-white font-bold text-2xl mx-auto mb-4">R</div>
-          <h1 className="text-2xl font-bold text-gray-900">Create Rider Access</h1>
-          <p className="text-gray-500 text-sm mt-1">Use Google or request an email magic link</p>
+          <h1 className="text-2xl font-bold text-gray-900">Rider Signup</h1>
+          <p className="text-gray-500 text-sm mt-1">Register with Google or email link</p>
         </div>
 
         <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8 space-y-5">
@@ -164,7 +128,7 @@ export default function RegisterPage() {
           </div>
 
           <p className="text-center text-sm text-gray-500 mt-2">
-            Already have access? <Link href="/login" className="text-primary-500 font-medium hover:underline">Open rider login</Link>
+            Already have an account? <Link href="/login" className="text-primary-500 font-medium hover:underline">Login here</Link>
           </p>
         </div>
       </div>
