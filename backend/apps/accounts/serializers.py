@@ -71,6 +71,22 @@ class LoginSerializer(serializers.Serializer):
     password = serializers.CharField(write_only=True)
 
 
+class MagicLinkRequestSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+    role = serializers.ChoiceField(choices=['SUPERADMIN', 'ADMIN', 'MERCHANT', 'RIDER', 'USER'])
+    redirect_url = serializers.URLField(required=False, allow_blank=True)
+
+
+class MagicLinkVerifySerializer(serializers.Serializer):
+    email = serializers.EmailField()
+    token = serializers.CharField()
+    role = serializers.ChoiceField(
+        choices=['SUPERADMIN', 'ADMIN', 'MERCHANT', 'RIDER', 'USER'],
+        required=False,
+        allow_null=True,
+    )
+
+
 class GoogleLoginSerializer(serializers.Serializer):
     id_token = serializers.CharField()
     role = serializers.ChoiceField(
@@ -83,8 +99,7 @@ class GoogleLoginSerializer(serializers.Serializer):
 class GoogleSignupSerializer(serializers.Serializer):
     id_token = serializers.CharField()
     role = serializers.ChoiceField(choices=['SUPERADMIN', 'ADMIN', 'MERCHANT', 'RIDER', 'USER'])
-    phone = serializers.CharField(max_length=20)
-    otp_code = serializers.CharField(max_length=6, min_length=6)
+    email = serializers.EmailField(required=False)
     full_name = serializers.CharField(max_length=200, required=False, allow_blank=True)
     business_name = serializers.CharField(max_length=200, required=False, allow_blank=True)
     admin_sub_role = serializers.ChoiceField(
@@ -100,6 +115,10 @@ class TokenRefreshSerializer(serializers.Serializer):
 
 class LogoutSerializer(serializers.Serializer):
     refresh = serializers.CharField()
+
+
+class UsernameAvailabilitySerializer(serializers.Serializer):
+    username = serializers.CharField(max_length=150)
 
 
 # ═══════════════════════════════════════════════════════════════════
