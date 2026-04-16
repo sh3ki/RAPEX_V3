@@ -279,13 +279,38 @@ class AuthService:
         return user
 
     @staticmethod
-    def login(email: str, password: str) -> dict:
-        """Password auth is deprecated in favor of Google and magic links."""
-        raise RapexAPIException(
-            tr('auth.password.disabled'),
-            code='password_login_disabled',
-            status_code=405,
-        )
+    def login(identifier: str, password: str, role: str | None = None) -> dict:
+        """Authenticate with email or username plus password."""
+        lookup = (identifier or '').strip().lower()
+        if not lookup or not password:
+            raise RapexAPIException(
+                tr('auth.password.invalid'),
+                code='invalid_credentials',
+                status_code=401,
+            )
+
+        user = CustomUser.objects.filter(email__iexact=lookup).first()
+        if not user:
+            user = CustomUser.objects.filter(username__iexact=lookup).first()
+
+        if not user or not user.has_usable_password() or not user.check_password(password):
+            raise RapexAPIException(
+                tr('auth.password.invalid'),
+                code='invalid_credentials',
+                status_code=401,
+            )
+
+        if role and user.role != role:
+            raise RapexAPIException(
+                tr('auth.google.role_conflict'),
+                code='role_mismatch',
+                status_code=403,
+            )
+
+        if not user.is_active:
+            raise RapexAPIException(tr('auth.account.inactive'), code='account_inactive', status_code=403)
+
+        return AuthService.login_by_user(user, message=tr('auth.password.login_success'))
 
     @staticmethod
     def login_by_user(user, message: str | None = None) -> dict:
@@ -370,11 +395,11 @@ class MagicLinkService:
     @staticmethod
     def _default_redirect(role: str) -> str:
         defaults = {
-            Roles.USER: 'http://localhost:3000/login',
-            Roles.MERCHANT: 'http://localhost:3001/login',
-            Roles.RIDER: 'http://localhost:3002/login',
-            Roles.ADMIN: 'http://localhost:3003/login',
-            Roles.SUPERADMIN: 'http://localhost:3004/login',
+            Roles.USER: 'http://localhost:3000/auth/callback',
+            Roles.MERCHANT: 'http://localhost:3001/auth/callback',
+            Roles.RIDER: 'http://localhost:3002/auth/callback',
+            Roles.ADMIN: 'http://localhost:3003/auth/callback',
+            Roles.SUPERADMIN: 'http://localhost:3004/auth/callback',
         }
         return defaults.get(role, defaults[Roles.USER])
 
@@ -387,6 +412,14 @@ class MagicLinkService:
     @staticmethod
     def request_magic_link(email: str, role: str, redirect_url: str = '') -> dict:
         normalized_email = email.lower().strip()
+
+        if CustomUser.objects.filter(email__iexact=normalized_email).exists():
+            raise RapexAPIException(
+                tr('auth.magic_link.signup_only'),
+                code='magic_link_signup_only',
+                status_code=409,
+            )
+
         token = get_random_string(48)
         token_hash = hashlib.sha256(token.encode()).hexdigest()
 
