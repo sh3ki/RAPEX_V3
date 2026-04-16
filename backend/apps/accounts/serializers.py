@@ -67,8 +67,21 @@ class RiderRegistrationSerializer(serializers.Serializer):
 # LOGIN SERIALIZERS
 # ═══════════════════════════════════════════════════════════════════
 class LoginSerializer(serializers.Serializer):
-    email = serializers.EmailField()
+    identifier = serializers.CharField(required=False, allow_blank=False)
+    email = serializers.EmailField(required=False)
     password = serializers.CharField(write_only=True)
+    role = serializers.ChoiceField(
+        choices=['SUPERADMIN', 'ADMIN', 'MERCHANT', 'RIDER', 'USER'],
+        required=False,
+        allow_null=True,
+    )
+
+    def validate(self, attrs):
+        identifier = attrs.get('identifier') or attrs.get('email')
+        if not identifier:
+            raise serializers.ValidationError('Either identifier or email is required.')
+        attrs['identifier'] = identifier.strip()
+        return attrs
 
 
 class MagicLinkRequestSerializer(serializers.Serializer):
