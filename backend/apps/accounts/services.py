@@ -7,9 +7,11 @@ import logging
 import random
 import string
 from datetime import timedelta
+from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
 import requests
 from django.conf import settings
+from django.core.mail import send_mail
 from django.db import transaction
 from django.utils import timezone
 from django.utils.crypto import get_random_string
@@ -19,6 +21,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 
 from apps.core.constants import Roles
 from apps.core.exceptions import InvalidOTP, OTPExpired, OTPRateLimitExceeded, RapexAPIException
+from apps.core.localization import tr
 
 from .models import (
     AdminProfile,
@@ -60,6 +63,7 @@ class OTPService:
         # Save OTP record
         otp_record = OTPRecord.objects.create(
             phone=phone,
+            channel=OTPRecord.Channel.SMS,
             otp_code=otp_code,
             purpose=purpose,
             expires_at=expires_at,
@@ -82,6 +86,7 @@ class OTPService:
         otp_record = OTPRecord.objects.filter(
             phone=phone,
             purpose=purpose,
+            channel=OTPRecord.Channel.SMS,
             is_used=False,
         ).order_by('-created_at').first()
 
@@ -147,6 +152,49 @@ class OTPService:
             logger.info(f"SMS sent to {phone} via Semaphore")
         except Exception as e:
             logger.error(f"Failed to send SMS to {phone}: {e}")
+
+    @staticmethod
+    def request_email_otp(email: str, purpose: str) -> dict:
+        otp_code = ''.join(random.choices(string.digits, k=6))
+        expires_at = timezone.now() + timedelta(minutes=15)
+        OTPRecord.objects.create(
+            email=email.lower(),
+            channel=OTPRecord.Channel.EMAIL,
+            otp_code=otp_code,
+            purpose=purpose,
+            expires_at=expires_at,
+        )
+
+        subject = 'RAPEX verification code'
+        message = f'Your verification code is {otp_code}. This code expires in 15 minutes.'
+        send_mail(subject, message, settings.DEFAULT_FROM_EMAIL, [email], fail_silently=bool(settings.DEBUG))
+
+        return {
+            'message': 'OTP sent successfully.',
+            'expires_in': 900,
+        }
+
+    @staticmethod
+    def verify_email_otp(email: str, otp_code: str, purpose: str) -> bool:
+        otp_record = OTPRecord.objects.filter(
+            email=email.lower(),
+            purpose=purpose,
+            channel=OTPRecord.Channel.EMAIL,
+            is_used=False,
+        ).order_by('-created_at').first()
+
+        if not otp_record:
+            raise InvalidOTP()
+        if otp_record.is_expired:
+            raise OTPExpired()
+        if otp_record.otp_code != otp_code:
+            otp_record.attempt_count += 1
+            otp_record.save(update_fields=['attempt_count'])
+            raise InvalidOTP()
+
+        otp_record.is_used = True
+        otp_record.save(update_fields=['is_used'])
+        return True
 
 
 class AuthService:
@@ -232,69 +280,50 @@ class AuthService:
 
     @staticmethod
     def login(email: str, password: str) -> dict:
-        """Authenticate user by email and return JWT tokens."""
-        try:
-            user = CustomUser.objects.get(email=email)
-        except CustomUser.DoesNotExist:
-            raise RapexAPIException('Invalid credentials.', code='invalid_credentials', status_code=401)
-
-        if not user.check_password(password):
-            raise RapexAPIException('Invalid credentials.', code='invalid_credentials', status_code=401)
-
-        if not user.is_active:
-            raise RapexAPIException('Account is deactivated.', code='account_inactive', status_code=403)
-
-        # Generate JWT tokens
-        refresh = RefreshToken.for_user(user)
-        refresh['role'] = user.role
-        refresh['email'] = user.email
-
-        user.last_login = timezone.now()
-        user.save(update_fields=['last_login'])
-
-        logger.info(f"User logged in: {email} ({user.role})")
-        return {
-            'access': str(refresh.access_token),
-            'refresh': str(refresh),
-            'user': {
-                'id': str(user.id),
-                'email': user.email,
-                'phone': user.phone,
-                'first_name': user.first_name,
-                'last_name': user.last_name,
-                'avatar_url': user.avatar_url,
-                'role': user.role,
-                'is_verified': user.is_verified,
-            },
-        }
+        """Password auth is deprecated in favor of Google and magic links."""
+        raise RapexAPIException(
+            tr('auth.password.disabled'),
+            code='password_login_disabled',
+            status_code=405,
+        )
 
     @staticmethod
-    def login_by_user(user) -> dict:
+    def login_by_user(user, message: str | None = None) -> dict:
         """Generate JWT tokens directly from a user object (used after registration)."""
         if not user.is_active:
-            raise RapexAPIException('Account is deactivated.', code='account_inactive', status_code=403)
+            raise RapexAPIException(tr('auth.account.inactive'), code='account_inactive', status_code=403)
 
         refresh = RefreshToken.for_user(user)
         refresh['role'] = user.role
         refresh['email'] = user.email
+        refresh['status'] = user.status
+        refresh['wizard_completed'] = user.wizard_completed
 
         user.last_login = timezone.now()
         user.save(update_fields=['last_login'])
 
-        return {
+        payload = {
             'access': str(refresh.access_token),
             'refresh': str(refresh),
             'user': {
                 'id': str(user.id),
                 'email': user.email,
                 'phone': user.phone,
+                'username': user.username,
                 'first_name': user.first_name,
                 'last_name': user.last_name,
                 'avatar_url': user.avatar_url,
+                'profile_image_url': user.profile_image_url,
+                'google_id': user.google_id,
                 'role': user.role,
+                'status': user.status,
+                'wizard_completed': user.wizard_completed,
                 'is_verified': user.is_verified,
             },
         }
+        if message:
+            payload['message'] = message
+        return payload
 
     @staticmethod
     def logout(refresh_token: str) -> dict:
@@ -326,6 +355,110 @@ class DeviceFingerprintService:
 
         fingerprint = DeviceFingerprintService.generate(device_id, user_agent, platform)
         return user.device_id == fingerprint
+
+
+class MagicLinkService:
+    """Primary fallback authentication via email magic links."""
+
+    @staticmethod
+    def _build_link(redirect_url: str, token: str, email: str, role: str) -> str:
+        parsed = urlparse(redirect_url)
+        query = dict(parse_qsl(parsed.query, keep_blank_values=True))
+        query.update({'token': token, 'email': email, 'role': role})
+        return urlunparse(parsed._replace(query=urlencode(query)))
+
+    @staticmethod
+    def _default_redirect(role: str) -> str:
+        defaults = {
+            Roles.USER: 'http://localhost:3000/login',
+            Roles.MERCHANT: 'http://localhost:3001/login',
+            Roles.RIDER: 'http://localhost:3002/login',
+            Roles.ADMIN: 'http://localhost:3003/login',
+            Roles.SUPERADMIN: 'http://localhost:3004/login',
+        }
+        return defaults.get(role, defaults[Roles.USER])
+
+    @staticmethod
+    def _account_defaults(role: str) -> tuple[str, bool]:
+        if role == Roles.MERCHANT:
+            return CustomUser.AccountStatus.PENDING, False
+        return CustomUser.AccountStatus.APPROVED, True
+
+    @staticmethod
+    def request_magic_link(email: str, role: str, redirect_url: str = '') -> dict:
+        normalized_email = email.lower().strip()
+        token = get_random_string(48)
+        token_hash = hashlib.sha256(token.encode()).hexdigest()
+
+        OTPRecord.objects.create(
+            email=normalized_email,
+            channel=OTPRecord.Channel.EMAIL,
+            purpose=OTPRecord.Purpose.MAGIC_LINK,
+            otp_code='000000',
+            token_hash=token_hash,
+            expires_at=timezone.now() + timedelta(minutes=15),
+            meta={'role': role},
+        )
+
+        target = redirect_url or MagicLinkService._default_redirect(role)
+        magic_link = MagicLinkService._build_link(target, token, normalized_email, role)
+
+        send_mail(
+            'RAPEX sign in link',
+            f'Use this secure sign in link: {magic_link}\n\nThis link expires in 15 minutes.',
+            settings.DEFAULT_FROM_EMAIL,
+            [normalized_email],
+            fail_silently=bool(settings.DEBUG),
+        )
+
+        response = {'message': tr('auth.magic_link.sent')}
+        if settings.DEBUG:
+            response['debug_magic_link'] = magic_link
+        return response
+
+    @staticmethod
+    @transaction.atomic
+    def verify_magic_link(email: str, token: str, role: str | None = None) -> dict:
+        normalized_email = email.lower().strip()
+        record = OTPRecord.objects.filter(
+            email=normalized_email,
+            channel=OTPRecord.Channel.EMAIL,
+            purpose=OTPRecord.Purpose.MAGIC_LINK,
+            is_used=False,
+        ).order_by('-created_at').first()
+
+        if not record or record.is_expired:
+            raise RapexAPIException(tr('auth.magic_link.invalid'), code='magic_link_invalid', status_code=401)
+
+        expected_hash = hashlib.sha256(token.encode()).hexdigest()
+        if record.token_hash != expected_hash:
+            raise RapexAPIException(tr('auth.magic_link.invalid'), code='magic_link_invalid', status_code=401)
+
+        requested_role = role or record.meta.get('role')
+        if requested_role not in dict(Roles.CHOICES):
+            raise RapexAPIException('Invalid role for magic link.', code='invalid_role', status_code=400)
+
+        user = CustomUser.objects.filter(email=normalized_email).first()
+        if user and user.role != requested_role:
+            raise RapexAPIException(tr('auth.google.role_conflict'), code='role_mismatch', status_code=403)
+
+        if not user:
+            account_status, wizard_completed = MagicLinkService._account_defaults(requested_role)
+            user = CustomUser.objects.create_user(
+                phone=None,
+                role=requested_role,
+                email=normalized_email,
+                is_verified=True,
+                status=account_status,
+                wizard_completed=wizard_completed,
+            )
+            user.set_unusable_password()
+            user.save(update_fields=['password'])
+            GoogleAuthService._ensure_profile(user, requested_role, normalized_email.split('@')[0], {})
+
+        record.is_used = True
+        record.save(update_fields=['is_used'])
+        return AuthService.login_by_user(user, message=tr('auth.magic_link.login_success'))
 
 
 class GoogleAuthService:
@@ -393,6 +526,10 @@ class GoogleAuthService:
             user.avatar_url = google_data['picture']
             changed_fields.append('avatar_url')
 
+        if google_data.get('picture') and user.profile_image_url != google_data['picture']:
+            user.profile_image_url = google_data['picture']
+            changed_fields.append('profile_image_url')
+
         if changed_fields:
             user.save(update_fields=changed_fields)
 
@@ -417,6 +554,11 @@ class GoogleAuthService:
                 'last_login_at': timezone.now(),
             },
         )
+
+        if user.google_id != google_data['sub']:
+            user.google_id = google_data['sub']
+            user.save(update_fields=['google_id'])
+
         return social_account
 
     @staticmethod
@@ -429,6 +571,8 @@ class GoogleAuthService:
                 defaults={
                     'full_name': full_name,
                     'business_name': extra_data.get('business_name', ''),
+                    'status': MerchantProfile.AccountStatus.PENDING,
+                    'wizard_completed': False,
                 },
             )
         elif role == Roles.RIDER:
@@ -453,97 +597,63 @@ class GoogleAuthService:
             provider_user_id=google_data['sub'],
         ).first()
 
+        requested_role = role
+        if requested_role and requested_role not in dict(Roles.CHOICES):
+            raise RapexAPIException('Invalid role.', code='invalid_role', status_code=400)
+
         user = social_account.user if social_account else None
         if not user:
             user = CustomUser.objects.filter(email=google_data['email']).first()
-            if user:
-                GoogleAuthService._sync_social_account(user, google_data)
 
+        if user and requested_role and user.role != requested_role:
+            raise RapexAPIException(tr('auth.google.role_conflict'), code='role_mismatch', status_code=403)
+
+        created = False
         if not user:
-            raise RapexAPIException(
-                'No account is linked to this Google email. Please sign up first.',
-                code='google_signup_required',
-                status_code=404,
-            )
+            if not requested_role:
+                raise RapexAPIException(tr('auth.signup_required'), code='google_signup_required', status_code=404)
 
-        if role and user.role != role:
-            raise RapexAPIException('This Google account belongs to a different role.', code='role_mismatch', status_code=403)
+            account_status = CustomUser.AccountStatus.PENDING if requested_role == Roles.MERCHANT else CustomUser.AccountStatus.APPROVED
+            wizard_completed = requested_role != Roles.MERCHANT
+            user = CustomUser.objects.create_user(
+                phone=None,
+                role=requested_role,
+                email=google_data['email'],
+                is_verified=True,
+                first_name=google_data.get('given_name', ''),
+                last_name=google_data.get('family_name', ''),
+                avatar_url=google_data.get('picture', ''),
+                profile_image_url=google_data.get('picture', ''),
+                google_id=google_data.get('sub'),
+                status=account_status,
+                wizard_completed=wizard_completed,
+            )
+            user.set_unusable_password()
+            user.save(update_fields=['password'])
+            GoogleAuthService._ensure_profile(
+                user,
+                requested_role,
+                (google_data.get('full_name') or google_data['email']).strip(),
+                {},
+            )
+            created = True
 
         GoogleAuthService._sync_user_identity_fields(user, google_data)
         GoogleAuthService._sync_social_account(user, google_data)
-        return AuthService.login_by_user(user)
+        return AuthService.login_by_user(
+            user,
+            message=tr('auth.google.account_created') if created else tr('auth.google.login_success'),
+        )
 
     @staticmethod
     @transaction.atomic
     def signup(
         id_token: str,
         role: str,
-        phone: str,
-        otp_code: str,
+        phone: str | None = None,
+        otp_code: str | None = None,
         full_name: str = '',
         extra_data: dict | None = None,
     ) -> dict:
-        extra_data = extra_data or {}
-        google_data = GoogleAuthService._verify_google_token(id_token)
-
-        if role in (Roles.ADMIN, Roles.SUPERADMIN) and not settings.GOOGLE_ALLOW_PRIVILEGED_SIGNUP:
-            raise RapexAPIException(
-                'Google signup for Admin/SuperAdmin is disabled.',
-                code='privileged_google_signup_disabled',
-                status_code=403,
-            )
-
-        OTPService.verify_otp(phone=phone, otp_code=otp_code, purpose=OTPRecord.Purpose.REGISTRATION)
-
-        social_account = SocialAccount.objects.select_related('user').filter(
-            provider=SocialAccount.Provider.GOOGLE,
-            provider_user_id=google_data['sub'],
-        ).first()
-        if social_account:
-            user = social_account.user
-            if user.role != role:
-                raise RapexAPIException('This Google account is already linked to another role.', code='role_mismatch', status_code=403)
-            GoogleAuthService._sync_user_identity_fields(user, google_data)
-            return AuthService.login_by_user(user)
-
-        existing_email_user = CustomUser.objects.filter(email=google_data['email']).first()
-        if existing_email_user and existing_email_user.role != role:
-            raise RapexAPIException('Email already belongs to another role account.', code='email_role_conflict', status_code=409)
-
-        if existing_email_user:
-            if existing_email_user.phone != phone:
-                if CustomUser.objects.filter(phone=phone).exclude(pk=existing_email_user.pk).exists():
-                    raise RapexAPIException('Phone number already registered.', code='phone_exists', status_code=409)
-                existing_email_user.phone = phone
-                existing_email_user.save(update_fields=['phone'])
-
-            user = existing_email_user
-        else:
-            if CustomUser.objects.filter(phone=phone).exists():
-                raise RapexAPIException('Phone number already registered.', code='phone_exists', status_code=409)
-
-            user = CustomUser.objects.create_user(
-                phone=phone,
-                role=role,
-                email=google_data['email'],
-                is_verified=True,
-                first_name=google_data.get('given_name', ''),
-                last_name=google_data.get('family_name', ''),
-                avatar_url=google_data.get('picture', ''),
-            )
-            user.set_unusable_password()
-            user.save(update_fields=['password'])
-
-        profile_name = (full_name or google_data.get('full_name') or '').strip()
-        if not profile_name:
-            profile_name = (f"{user.first_name} {user.last_name}".strip() or google_data['email'])
-
-        GoogleAuthService._sync_user_identity_fields(user, google_data)
-        GoogleAuthService._ensure_profile(user, role, profile_name, extra_data)
-        GoogleAuthService._sync_social_account(user, google_data)
-
-        if not user.device_id:
-            user.device_id = get_random_string(32)
-            user.save(update_fields=['device_id'])
-
-        return AuthService.login_by_user(user)
+        # Backward-compatible endpoint: Google signup now delegates to Google login provisioning flow.
+        return GoogleAuthService.login(id_token=id_token, role=role)
