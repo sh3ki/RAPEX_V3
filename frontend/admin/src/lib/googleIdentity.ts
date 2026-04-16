@@ -17,7 +17,7 @@ const loadGoogleScript = (): Promise<void> => {
 
     const script = document.createElement('script');
     script.id = GOOGLE_SCRIPT_ID;
-    script.src = 'https://accounts.google.com/gsi/client';
+    script.src = 'https://accounts.google.com/gsi/client?hl=en';
     script.async = true;
     script.defer = true;
     script.onload = () => resolve();
