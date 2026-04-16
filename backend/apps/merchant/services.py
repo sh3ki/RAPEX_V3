@@ -1,14 +1,29 @@
 """RAPEX Merchant Module — Services"""
 import logging
 import math
+import os
+import uuid
 from decimal import Decimal
 
+from django.db import transaction
 from django.db.models import F, FloatField, Value
 from django.db.models.functions import ACos, Cos, Radians, Sin
+from django.utils import timezone
+from django.utils.text import get_valid_filename
 
 from apps.core.exceptions import MaxStoresReached, RapexAPIException
+from apps.accounts.models import CustomUser, OTPRecord
+from apps.accounts.services import OTPService
 
-from .models import MerchantStore
+from .models import (
+    MerchantStore,
+    MerchantBusinessCategory,
+    MerchantBusinessType,
+    MerchantBusinessProfile,
+    MerchantLocation,
+    MerchantDocument,
+    MerchantOnboardingState,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -75,3 +90,263 @@ class MerchantService:
         ).filter(distance_km__lte=radius_km).order_by('distance_km')
 
         return qs
+
+    @staticmethod
+    def get_or_create_onboarding_state(merchant_profile):
+        state, _ = MerchantOnboardingState.objects.get_or_create(merchant=merchant_profile)
+        return state
+
+    @staticmethod
+    def _assert_onboarding_editable(state: MerchantOnboardingState):
+        if state.is_submitted and not state.can_resubmit:
+            raise RapexAPIException(
+                'Your onboarding is already submitted. Wait for admin action or resubmission request.',
+                code='onboarding_locked',
+                status_code=403,
+            )
+
+    @staticmethod
+    def upload_onboarding_document(merchant_profile, document_type: str, upload_file):
+        state = MerchantService.get_or_create_onboarding_state(merchant_profile)
+        MerchantService._assert_onboarding_editable(state)
+
+        original_name = get_valid_filename(upload_file.name or 'document')
+        _, extension = os.path.splitext(original_name)
+        extension = (extension or '').lower()
+
+        path = (
+            f"merchant-onboarding/{merchant_profile.id}/"
+            f"{document_type.lower()}-{uuid.uuid4().hex}{extension}"
+        )
+        stored_path = default_storage.save(path, upload_file)
+        return stored_path
+
+    @staticmethod
+    @transaction.atomic
+    def save_profile_step(merchant_profile, validated_data: dict):
+        state = MerchantService.get_or_create_onboarding_state(merchant_profile)
+        MerchantService._assert_onboarding_editable(state)
+
+        user = merchant_profile.user
+        username = validated_data['username'].strip()
+        phone_number = validated_data['phone_number'].strip()
+
+        if CustomUser.objects.filter(username=username).exclude(pk=user.pk).exists():
+            raise RapexAPIException('Username already exists.', code='username_exists', status_code=409)
+
+        if CustomUser.objects.filter(phone=phone_number).exclude(pk=user.pk).exists():
+            raise RapexAPIException('Phone number already exists.', code='phone_exists', status_code=409)
+
+        if user.email and validated_data['email'].lower() != user.email.lower():
+            raise RapexAPIException('Email cannot be edited for this account.', code='email_readonly', status_code=400)
+
+        user.first_name = validated_data['first_name'].strip()
+        user.last_name = validated_data['last_name'].strip()
+        user.username = username
+        user.phone = phone_number
+        image_url = validated_data.get('profile_image_url', '').strip()
+        if image_url:
+            user.avatar_url = image_url
+            user.profile_image_url = image_url
+        user.save(update_fields=['first_name', 'last_name', 'username', 'phone', 'avatar_url', 'profile_image_url'])
+
+        middle_name = validated_data.get('middle_name', '').strip()
+        merchant_profile.full_name = ' '.join(
+            [x for x in [user.first_name, middle_name, user.last_name] if x]
+        ).strip()
+        merchant_profile.save(update_fields=['full_name'])
+
+        state.current_step = max(state.current_step, 2)
+        draft = state.draft_payload or {}
+        draft['step1_profile'] = {
+            'profile_image_url': image_url,
+            'first_name': user.first_name,
+            'middle_name': middle_name,
+            'last_name': user.last_name,
+            'email': user.email,
+            'username': user.username,
+            'phone_number': user.phone,
+        }
+        state.draft_payload = draft
+        state.save(update_fields=['current_step', 'draft_payload'])
+        return state
+
+    @staticmethod
+    @transaction.atomic
+    def save_business_step(merchant_profile, validated_data: dict):
+        state = MerchantService.get_or_create_onboarding_state(merchant_profile)
+        MerchantService._assert_onboarding_editable(state)
+
+        categories = list(MerchantBusinessCategory.objects.filter(id__in=validated_data['category_ids'], is_active=True))
+        business_types = list(MerchantBusinessType.objects.filter(id__in=validated_data['business_type_ids'], is_active=True))
+
+        if not categories:
+            raise RapexAPIException('At least one business category is required.', code='category_required', status_code=400)
+        if not business_types:
+            raise RapexAPIException('At least one business type is required.', code='type_required', status_code=400)
+
+        allowed_category_ids = {str(item.id) for item in categories}
+        for item in business_types:
+            if str(item.category_id) not in allowed_category_ids:
+                raise RapexAPIException(
+                    'Selected business type does not match selected categories.',
+                    code='type_category_mismatch',
+                    status_code=400,
+                )
+
+        business_profile, _ = MerchantBusinessProfile.objects.get_or_create(
+            merchant=merchant_profile,
+            defaults={'business_name': validated_data['business_name']},
+        )
+        business_profile.business_name = validated_data['business_name'].strip()
+        business_profile.registration_type = validated_data['registration_type']
+        business_profile.save(update_fields=['business_name', 'registration_type'])
+        business_profile.categories.set(categories)
+        business_profile.business_types.set(business_types)
+
+        state.current_step = max(state.current_step, 3)
+        draft = state.draft_payload or {}
+        draft['step2_business'] = {
+            'business_name': business_profile.business_name,
+            'registration_type': business_profile.registration_type,
+            'category_ids': [str(item.id) for item in categories],
+            'business_type_ids': [str(item.id) for item in business_types],
+        }
+        state.draft_payload = draft
+        state.save(update_fields=['current_step', 'draft_payload'])
+        return state
+
+    @staticmethod
+    @transaction.atomic
+    def save_location_step(merchant_profile, validated_data: dict):
+        state = MerchantService.get_or_create_onboarding_state(merchant_profile)
+        MerchantService._assert_onboarding_editable(state)
+
+        location, _ = MerchantLocation.objects.get_or_create(merchant=merchant_profile)
+        for key, value in validated_data.items():
+            setattr(location, key, value)
+        location.save()
+
+        state.current_step = max(state.current_step, 4)
+        draft = state.draft_payload or {}
+        draft['step3_location'] = {
+            key: str(value) if value is not None else ''
+            for key, value in validated_data.items()
+        }
+        state.draft_payload = draft
+        state.save(update_fields=['current_step', 'draft_payload'])
+        return state
+
+    @staticmethod
+    @transaction.atomic
+    def save_documents_step(merchant_profile, validated_data: dict):
+        state = MerchantService.get_or_create_onboarding_state(merchant_profile)
+        MerchantService._assert_onboarding_editable(state)
+
+        MerchantDocument.objects.filter(merchant=merchant_profile, is_deleted=False).update(is_deleted=True)
+        records = []
+        for item in validated_data['documents']:
+            records.append(
+                MerchantDocument(
+                    merchant=merchant_profile,
+                    document_type=item['document_type'],
+                    file_url=item['file_url'],
+                    is_optional=item.get('is_optional', False),
+                )
+            )
+        MerchantDocument.objects.bulk_create(records)
+
+        state.current_step = max(state.current_step, 5)
+        draft = state.draft_payload or {}
+        draft['step4_documents'] = validated_data['documents']
+        state.draft_payload = draft
+        state.save(update_fields=['current_step', 'draft_payload'])
+        return state
+
+    @staticmethod
+    def send_verification_otps(merchant_profile):
+        user = merchant_profile.user
+        if not user.email:
+            raise RapexAPIException('Email is required before verification.', code='email_required', status_code=400)
+        if not user.phone:
+            raise RapexAPIException('Phone number is required before verification.', code='phone_required', status_code=400)
+
+        email_result = OTPService.request_email_otp(user.email, OTPRecord.Purpose.EMAIL_VERIFICATION)
+        phone_result = OTPService.request_otp(user.phone, OTPRecord.Purpose.PHONE_VERIFICATION)
+        return {
+            'email': email_result,
+            'phone': phone_result,
+        }
+
+    @staticmethod
+    @transaction.atomic
+    def submit_onboarding(merchant_profile, email_otp: str, phone_otp: str, terms_accepted: bool, privacy_accepted: bool):
+        state = MerchantService.get_or_create_onboarding_state(merchant_profile)
+        MerchantService._assert_onboarding_editable(state)
+
+        if not terms_accepted or not privacy_accepted:
+            raise RapexAPIException(
+                'You must agree to Terms and Privacy Policy before submission.',
+                code='terms_required',
+                status_code=400,
+            )
+
+        user = merchant_profile.user
+        if not user.email or not user.phone:
+            raise RapexAPIException('Email and phone are required before submission.', code='contact_required', status_code=400)
+
+        OTPService.verify_email_otp(user.email, email_otp, OTPRecord.Purpose.EMAIL_VERIFICATION)
+        OTPService.verify_otp(user.phone, phone_otp, OTPRecord.Purpose.PHONE_VERIFICATION)
+
+        business_profile = MerchantBusinessProfile.objects.filter(merchant=merchant_profile).first()
+        location = MerchantLocation.objects.filter(merchant=merchant_profile).first()
+        if not business_profile or not location:
+            raise RapexAPIException('Business and location steps must be completed before submission.', code='wizard_incomplete', status_code=400)
+
+        merchant_profile.business_name = business_profile.business_name
+        merchant_profile.business_lat = location.latitude
+        merchant_profile.business_lng = location.longitude
+        merchant_profile.business_address = ', '.join(
+            [
+                part for part in [
+                    location.house_number,
+                    location.street_name,
+                    location.barangay,
+                    location.city_municipality,
+                    location.province,
+                    location.zip_code,
+                ] if part
+            ]
+        )
+        merchant_profile.status = merchant_profile.AccountStatus.PENDING
+        merchant_profile.wizard_completed = True
+        merchant_profile.onboarding_submitted_at = timezone.now()
+        merchant_profile.resubmission_requested = False
+        merchant_profile.save()
+
+        user.status = user.AccountStatus.PENDING
+        user.wizard_completed = True
+        user.save(update_fields=['status', 'wizard_completed'])
+
+        state.is_submitted = True
+        state.email_verified = True
+        state.phone_verified = True
+        state.terms_accepted = terms_accepted
+        state.privacy_accepted = privacy_accepted
+        state.submitted_at = timezone.now()
+        state.current_step = 5
+        state.can_resubmit = False
+        state.save(
+            update_fields=[
+                'is_submitted',
+                'email_verified',
+                'phone_verified',
+                'terms_accepted',
+                'privacy_accepted',
+                'submitted_at',
+                'current_step',
+                'can_resubmit',
+            ]
+        )
+
+        return state
