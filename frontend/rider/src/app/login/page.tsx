@@ -1,6 +1,7 @@
-﻿'use client';
+'use client';
+
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { renderGoogleButton } from '@/lib/googleIdentity';
 import { useAuthStore } from '@/store/authStore';
@@ -10,13 +11,12 @@ const t = authText('en');
 
 export default function LoginPage() {
   const router = useRouter();
-  const params = useSearchParams();
   const user = useAuthStore((s) => s.user);
+  const loginWithPassword = useAuthStore((s) => s.loginWithPassword);
   const loginWithGoogle = useAuthStore((s) => s.loginWithGoogle);
-  const requestMagicLink = useAuthStore((s) => s.requestMagicLink);
-  const verifyMagicLink = useAuthStore((s) => s.verifyMagicLink);
 
-  const [email, setEmail] = useState('');
+  const [identifier, setIdentifier] = useState('');
+  const [password, setPassword] = useState('');
   const [info, setInfo] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -45,10 +45,10 @@ export default function LoginPage() {
     [loginWithGoogle, router],
   );
 
-  const handleMagicLink = async (event: React.FormEvent) => {
+  const handlePasswordLogin = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!email) {
-      setError('Email is required.');
+    if (!identifier || !password) {
+      setError('Email or username and password are required.');
       return;
     }
 
@@ -56,51 +56,14 @@ export default function LoginPage() {
     setError('');
     setInfo('');
     try {
-      const result = await requestMagicLink(email, 'RIDER', `${window.location.origin}/login`);
-      setInfo(t.magicLinkSent);
-      if (result.debugLink) {
-        setInfo(`${t.magicLinkSent} Dev link: ${result.debugLink}`);
-      }
+      await loginWithPassword(identifier, password, 'RIDER');
+      router.push('/orders');
     } catch (err: any) {
-      setError(err?.response?.data?.message || t.magicLinkFailed);
+      setError(err?.response?.data?.message || 'Unable to login with password.');
     } finally {
       setLoading(false);
     }
   };
-
-  useEffect(() => {
-    const token = params.get('token');
-    const magicEmail = params.get('email');
-    const role = params.get('role') || 'RIDER';
-    if (!token || !magicEmail) {
-      return;
-    }
-
-    let isMounted = true;
-    const run = async () => {
-      setLoading(true);
-      setError('');
-      try {
-        await verifyMagicLink(magicEmail, token, role);
-        if (isMounted) {
-          router.replace('/orders');
-        }
-      } catch (err: any) {
-        if (isMounted) {
-          setError(err?.response?.data?.message || t.magicLinkVerifyFailed);
-        }
-      } finally {
-        if (isMounted) {
-          setLoading(false);
-        }
-      }
-    };
-
-    void run();
-    return () => {
-      isMounted = false;
-    };
-  }, [params, router, verifyMagicLink]);
 
   useEffect(() => {
     if (!googleClientId || !googleButtonRef.current) {
@@ -125,29 +88,37 @@ export default function LoginPage() {
         <div className="text-center mb-8">
           <div className="w-14 h-14 rounded-2xl bg-primary-500 flex items-center justify-center text-white font-bold text-2xl mx-auto mb-4">R</div>
           <h1 className="text-2xl font-bold text-gray-900">Rider Access</h1>
-          <p className="text-gray-500 text-sm mt-1">Primary: Google, Fallback: Email magic link</p>
+          <p className="text-gray-500 text-sm mt-1">Login with password or Google</p>
         </div>
         <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8 space-y-5">
           {error ? <div className="bg-red-50 border border-red-200 text-red-600 rounded-lg px-4 py-2.5 text-sm">{error}</div> : null}
           {info ? <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-lg px-4 py-2.5 text-sm">{info}</div> : null}
 
-          <form onSubmit={handleMagicLink} className="space-y-3">
-            <label className="block text-sm font-medium text-gray-700">{t.emailLabel}</label>
+          <form onSubmit={handlePasswordLogin} className="space-y-3">
+            <label className="block text-sm font-medium text-gray-700">{t.identifierLabel}</label>
             <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              type="text"
+              value={identifier}
+              onChange={(e) => setIdentifier(e.target.value)}
               className="w-full px-4 py-2.5 bg-white border border-gray-300 rounded-lg text-gray-900 text-sm placeholder-gray-400 focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/10 transition-all"
-              placeholder="rider@rapex.ph"
+              placeholder="rider@rapex.ph or username"
               required
             />
-            <p className="text-xs text-gray-500">{t.emailOnlyHint}</p>
+            <label className="block text-sm font-medium text-gray-700">{t.passwordLabel}</label>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full px-4 py-2.5 bg-white border border-gray-300 rounded-lg text-gray-900 text-sm placeholder-gray-400 focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/10 transition-all"
+              placeholder="Enter your password"
+              required
+            />
             <button
               type="submit"
               disabled={loading}
               className="w-full py-2.5 bg-primary-500 text-white font-semibold rounded-lg hover:bg-primary-600 disabled:opacity-50 transition-colors text-sm"
             >
-              {loading ? 'Sending...' : t.continueWithEmail}
+              {loading ? 'Signing in...' : t.continueWithPassword}
             </button>
           </form>
 
@@ -162,11 +133,10 @@ export default function LoginPage() {
           </div>
 
           <p className="text-center text-sm text-gray-500 mt-2">
-            Need email-only signup first? <Link href="/register" className="text-primary-500 font-medium hover:underline">Open rider signup</Link>
+            Don't have an account yet? <Link href="/register" className="text-primary-500 font-medium hover:underline">Register here</Link>
           </p>
         </div>
       </div>
     </div>
   );
 }
-
