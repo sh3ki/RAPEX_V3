@@ -95,6 +95,8 @@ class MerchantOnboardingProfileStepSerializer(serializers.Serializer):
     email = serializers.EmailField()
     username = serializers.CharField(max_length=150)
     phone_number = serializers.CharField(max_length=20)
+    password = serializers.CharField(write_only=True, min_length=8)
+    confirm_password = serializers.CharField(write_only=True, min_length=8)
 
 
 class MerchantOnboardingBusinessStepSerializer(serializers.Serializer):
@@ -147,6 +149,16 @@ class MerchantOnboardingDocumentUploadSerializer(serializers.Serializer):
         if document_type == MerchantDocument.DocumentType.SELFIE_WITH_ID and content_type == 'application/pdf':
             raise serializers.ValidationError({'file': 'SELFIE_WITH_ID must be an image file.'})
         return attrs
+
+
+class MerchantOnboardingProfileImageUploadSerializer(serializers.Serializer):
+    file = serializers.ImageField()
+
+    def validate_file(self, value):
+        max_size = 5 * 1024 * 1024
+        if value.size > max_size:
+            raise serializers.ValidationError('File exceeds 5MB size limit.')
+        return value
 
 
 class MerchantOnboardingDocumentsStepSerializer(serializers.Serializer):
