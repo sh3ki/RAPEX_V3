@@ -3,6 +3,7 @@ from .models import (
     MerchantStore,
     StoreSchedule,
     MerchantMarkupOverride,
+    MerchantCountryCode,
     MerchantBusinessCategory,
     MerchantBusinessType,
     MerchantBusinessProfile,
@@ -26,6 +27,13 @@ class StoreScheduleAdmin(admin.ModelAdmin):
 @admin.register(MerchantMarkupOverride)
 class MerchantMarkupOverrideAdmin(admin.ModelAdmin):
     list_display = ['merchant', 'store_type', 'tier_1_rate', 'tier_2_rate', 'tier_3_rate']
+
+
+@admin.register(MerchantCountryCode)
+class MerchantCountryCodeAdmin(admin.ModelAdmin):
+    list_display = ['country_name', 'country_code', 'country_flag_emoji', 'max_digits', 'is_default', 'is_active']
+    list_filter = ['is_default', 'is_active']
+    search_fields = ['country_name', 'country_code']
 
 
 @admin.register(MerchantBusinessCategory)
