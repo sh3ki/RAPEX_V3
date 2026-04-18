@@ -1,6 +1,6 @@
 'use client';
 
-import { Check, ChevronRight } from 'lucide-react';
+import { Check, ChevronLeft, ChevronRight } from 'lucide-react';
 import { cn } from '../../utils/cn';
 import { Button } from './Button';
 
@@ -44,8 +44,17 @@ export function Wizard({
             const upcoming = index > currentStep;
 
             return (
-              <li key={step.id} className="min-w-[126px] flex-1">
-                <div className="flex items-center justify-center">
+              <li key={step.id} className="relative min-w-[126px] flex-1">
+                {index < steps.length - 1 ? (
+                  <span
+                    className={cn(
+                      'pointer-events-none absolute left-1/2 top-[22px] z-0 h-[2px] w-[calc(100%-2.75rem)]',
+                      done || active ? 'bg-primary-200' : 'bg-slate-200',
+                    )}
+                  />
+                ) : null}
+
+                <div className="relative z-10 flex items-center justify-center">
                   <button
                     type="button"
                     onClick={() => onStepChange(index)}
@@ -63,14 +72,6 @@ export function Wizard({
                       {done ? <Check size={16} /> : step.icon || index + 1}
                     </span>
                   </button>
-                  {index < steps.length - 1 ? (
-                    <span
-                      className={cn(
-                        'mx-3 h-[2px] flex-1 min-w-[36px] self-center',
-                        done || active ? 'bg-primary-200' : 'bg-slate-200',
-                      )}
-                    />
-                  ) : null}
                 </div>
                 <p
                   className={cn(
@@ -93,6 +94,7 @@ export function Wizard({
 
       <div className="flex items-center justify-between border-t border-slate-200/80 bg-slate-50/70 px-4 py-4 sm:px-6">
         <Button type="button" variant="secondary" onClick={onPrevious} disabled={currentStep === 0}>
+          <ChevronLeft size={16} />
           Previous
         </Button>
         {isLastStep ? (
