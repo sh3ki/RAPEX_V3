@@ -1,7 +1,7 @@
 # RAPEX Technologies OPC — FULL PROJECT PROGRESS TRACKER
 
-> **Last Updated:** April 16, 2026  
-> **Updated By:** GitHub Copilot (codebase scan + merchant onboarding null-safety patch)  
+> **Last Updated:** April 18, 2026  
+> **Updated By:** GitHub Copilot (onboarding stability + hydration safety + deferred profile image upload)  
 > **Version:** 1.0 MVP  
 > **Overall Progress (estimated from implemented code):** ![59%](https://progress-bar.xyz/59)
 
@@ -70,6 +70,18 @@
 - [x] Core commerce modules substantially implemented: `merchant`, `orders`, `wallet`, `delivery`
 - [x] Shared web UI layer implemented at `frontend/shared/src` and integrated by role wrappers
 - [x] Merchant onboarding web flow hardened against nullable profile hydration values causing controlled/uncontrolled input warnings and username trim runtime errors
+- [x] Merchant onboarding now supports DB-driven country codes with per-country max-digit constraints and updated shared phone component
+- [x] Merchant onboarding wizard refactored to shared redesigned components (wizard, inputs, dropdowns, uploads, password checks, checkbox, map picker)
+- [x] Admin merchant approval/rejection now blocked until all 5 onboarding steps are complete, with checklist progress exposed in API and admin web UI
+- [x] Merchant onboarding phone sync effect updated to prevent render loop (`Maximum update depth exceeded`)
+- [x] Merchant onboarding lookup data verified and populated in Docker DB (`categories=4`, `business_types=22`, `country_codes=8`)
+- [x] Merchant onboarding nested state patching now ignores no-op updates to prevent recursive render loops in profile/location/phone sync
+- [x] Merchant onboarding email field rendering is deterministic (static label + contextual hint) to reduce hydration mismatch risk
+- [x] Merchant onboarding phone country selector now uses shared dropdown styling and formatted options (`flag + country + code`)
+- [x] Merchant onboarding profile image UI extracted to shared component with inline preview and upload-on-next persistence behavior
+- [x] Shared dropdown and multiselect overlays constrained with improved z-index/max-height to prevent wizard overflow clipping
+- [x] Wizard step icon alignment centered and onboarding input placeholders standardized for predictable UX
+- [~] Running Docker backend seed command still appears to use an older source variant that omits merchant onboarding catalog seeding; source parity follow-up remains
 - [~] Web dashboards implemented but integration still incomplete
 - [ ] Mobile app implementation started
 
