@@ -19,6 +19,7 @@ interface DropdownProps {
   debounceMs?: number;
   fuzzySearch?: boolean;
   disabled?: boolean;
+  error?: string;
 }
 
 export function Dropdown({
@@ -31,6 +32,7 @@ export function Dropdown({
   debounceMs = 180,
   fuzzySearch = true,
   disabled = false,
+  error,
 }: DropdownProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -60,7 +62,7 @@ export function Dropdown({
 
   return (
     <div className="relative space-y-1.5" ref={wrapperRef}>
-      {label ? <label className="text-sm font-semibold text-slate-700">{label}</label> : null}
+      {label ? <label className={cn('text-sm font-semibold', error ? 'text-red-700' : 'text-slate-700')}>{label}</label> : null}
       <button
         type="button"
         disabled={disabled}
@@ -70,6 +72,8 @@ export function Dropdown({
           'focus:outline-none focus:ring-2 focus:ring-primary-500/20',
           disabled
             ? 'cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400'
+            : error
+            ? 'border-red-300 bg-red-50 text-red-900 shadow-sm hover:border-red-400'
             : 'border-slate-300 bg-white text-slate-700 shadow-sm hover:border-slate-400',
         )}
       >
@@ -80,7 +84,7 @@ export function Dropdown({
       </button>
 
       {isOpen ? (
-        <div className="absolute left-0 right-0 z-[80] mt-2 w-full max-w-full rounded-xl border border-slate-200 bg-white p-2 shadow-2xl shadow-slate-900/10">
+        <div className="mt-2 w-full max-w-full rounded-xl border border-slate-200 bg-white p-2 shadow-lg shadow-slate-900/10">
           {canSearch ? (
             <SearchBar value={query} onChange={setQuery} placeholder="Search option..." className="max-w-none" />
           ) : null}
@@ -110,6 +114,7 @@ export function Dropdown({
           </div>
         </div>
       ) : null}
+      {error ? <p className="text-xs font-medium text-red-600">{error}</p> : null}
     </div>
   );
 }
