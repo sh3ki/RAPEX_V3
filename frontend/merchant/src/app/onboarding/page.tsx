@@ -1,10 +1,24 @@
 'use client';
 
+import { BriefcaseBusiness, Camera, CheckCircle2, FileText, Loader2, MapPin, ShieldCheck, UserRound } from 'lucide-react';
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import api from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
-import { Wizard } from '@shared/components/ui';
+import {
+  Button,
+  Checkbox,
+  ConfirmPasswordInput,
+  Dropdown,
+  FileUpload,
+  Input,
+  MapPickerModal,
+  MultiSelectDropdown,
+  PasswordInput,
+  PhoneNumberInput,
+  ProfileImageUpload,
+  Wizard,
+} from '@shared/components/ui';
 
 interface BusinessCategory {
   id: string;
@@ -15,6 +29,15 @@ interface BusinessType {
   id: string;
   name: string;
   category_id: string;
+}
+
+interface CountryCodeOption {
+  id: string;
+  country_name: string;
+  country_code: string;
+  country_flag_emoji: string;
+  max_digits: number;
+  is_default: boolean;
 }
 
 interface DocumentItem {
@@ -67,7 +90,6 @@ interface OnboardingState {
 
 declare global {
   interface Window {
-    L?: any;
     FaceDetector?: any;
   }
 }
@@ -75,11 +97,14 @@ declare global {
 const STORAGE_KEY = 'merchant_onboarding_draft';
 const MAP_PROVIDER = process.env.NEXT_PUBLIC_MAP_PROVIDER || 'leaflet';
 
-const PHONE_COUNTRY_OPTIONS = [
-  { code: '+63', label: 'PH (+63)' },
-  { code: '+1', label: 'US (+1)' },
-  { code: '+65', label: 'SG (+65)' },
-];
+const DEFAULT_PHONE_COUNTRY: CountryCodeOption = {
+  id: 'default-ph',
+  country_name: 'Philippines',
+  country_code: '+63',
+  country_flag_emoji: 'PH',
+  max_digits: 10,
+  is_default: true,
+};
 
 const isStrongPassword = (value: string) => {
   return value.length >= 8 && /[a-z]/.test(value) && /[A-Z]/.test(value) && /[0-9]/.test(value) && /[^A-Za-z0-9]/.test(value);
@@ -128,11 +153,11 @@ const initialState: OnboardingState = {
 };
 
 const steps = [
-  { id: 'profile', title: 'Profile' },
-  { id: 'business', title: 'Business' },
-  { id: 'location', title: 'Location' },
-  { id: 'documents', title: 'Documents' },
-  { id: 'verify', title: 'Verify & Submit' },
+  { id: 'profile', title: 'Profile', icon: <UserRound size={15} /> },
+  { id: 'business', title: 'Business', icon: <BriefcaseBusiness size={15} /> },
+  { id: 'location', title: 'Location', icon: <MapPin size={15} /> },
+  { id: 'documents', title: 'Documents', icon: <FileText size={15} /> },
+  { id: 'verify', title: 'Verify & Submit', icon: <ShieldCheck size={15} /> },
 ];
 
 const documentMatrix: Record<RegistrationType, Array<{ type: string; label: string; required: boolean }>> = {
@@ -159,6 +184,37 @@ const documentMatrix: Record<RegistrationType, Array<{ type: string; label: stri
   ],
 };
 
+function getPhoneMaxDigits(countryCode: string, countryCodes: CountryCodeOption[]): number {
+  return countryCodes.find((option) => option.country_code === countryCode)?.max_digits || DEFAULT_PHONE_COUNTRY.max_digits;
+}
+
+function splitPhoneNumber(phoneNumber: string, countryCodes: CountryCodeOption[]) {
+  const normalized = asSafeString(phoneNumber);
+  const sortedCodes = [...countryCodes].sort((a, b) => b.country_code.length - a.country_code.length);
+  const fallback = countryCodes.find((country) => country.is_default) || countryCodes[0] || DEFAULT_PHONE_COUNTRY;
+
+  for (const country of sortedCodes) {
+    if (normalized.startsWith(country.country_code)) {
+      return {
+        countryCode: country.country_code,
+        localNumber: normalized.slice(country.country_code.length).replace(/[^0-9]/g, '').slice(0, country.max_digits),
+      };
+    }
+  }
+
+  return {
+    countryCode: fallback.country_code,
+    localNumber: normalized.replace(/[^0-9]/g, '').slice(0, fallback.max_digits),
+  };
+}
+
+function profileInitials(firstName: string, lastName: string) {
+  const first = firstName.trim().charAt(0);
+  const last = lastName.trim().charAt(0);
+  const joined = `${first}${last}`.trim();
+  return joined ? joined.toUpperCase() : 'M';
+}
+
 async function dataUrlToFile(dataUrl: string, filename: string): Promise<File> {
   const response = await fetch(dataUrl);
   const blob = await response.blob();
@@ -167,13 +223,15 @@ async function dataUrlToFile(dataUrl: string, filename: string): Promise<File> {
 
 function Modal({ title, children, onClose }: { title: string; children: ReactNode; onClose: () => void }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-2xl rounded-xl bg-white shadow-lg border border-gray-200">
-        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200">
-          <h3 className="font-semibold text-gray-900">{title}</h3>
-          <button className="text-sm text-gray-500 hover:text-gray-700" onClick={onClose}>Close</button>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-4">
+      <div className="w-full max-w-2xl rounded-2xl border border-slate-200 bg-white shadow-2xl shadow-slate-950/20">
+        <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
+          <h3 className="font-semibold text-slate-900">{title}</h3>
+          <Button type="button" variant="ghost" size="sm" onClick={onClose}>
+            Close
+          </Button>
         </div>
-        <div className="max-h-[70vh] overflow-auto p-4 text-sm text-gray-700 whitespace-pre-wrap">{children}</div>
+        <div className="max-h-[70vh] overflow-auto p-4 text-sm text-slate-700 whitespace-pre-wrap">{children}</div>
       </div>
     </div>
   );
@@ -242,14 +300,17 @@ function SelfieCapture({
     if (!videoRef.current || !canvasRef.current) {
       return;
     }
+
     const video = videoRef.current;
     const canvas = canvasRef.current;
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
+
     const ctx = canvas.getContext('2d');
     if (!ctx) {
       return;
     }
+
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
     const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
     onCapture(dataUrl, supportsFaceDetector ? faceDetected : true);
@@ -257,8 +318,8 @@ function SelfieCapture({
 
   return (
     <div className="space-y-3">
-      <div className="relative w-full overflow-hidden rounded-lg border border-gray-300 bg-black">
-        <video ref={videoRef} autoPlay playsInline muted className="w-full h-[280px] object-cover" />
+      <div className="relative w-full overflow-hidden rounded-xl border border-slate-300 bg-black">
+        <video ref={videoRef} autoPlay playsInline muted className="h-[280px] w-full object-cover" />
         {faceBox ? (
           <div
             className="absolute border-2 border-emerald-400"
@@ -271,182 +332,23 @@ function SelfieCapture({
           />
         ) : null}
       </div>
-      <p className="text-xs text-gray-500">
+
+      <p className="text-xs text-slate-500">
         {supportsFaceDetector
           ? faceDetected
             ? 'Face detected. Capture is enabled.'
             : 'No face detected yet. Center your face and ID in frame.'
-          : 'Face detection not supported in this browser. Capture-only fallback is active.'}
+          : 'Face detection is not supported in this browser. Capture-only fallback is active.'}
       </p>
-      <button
-        type="button"
-        onClick={capture}
-        className="rounded-lg bg-primary-500 px-4 py-2 text-sm font-semibold text-white hover:bg-primary-600"
-      >
+
+      <Button type="button" onClick={capture}>
+        <Camera size={16} />
         Capture Selfie with ID
-      </button>
-      {value ? <img src={value} alt="Selfie with ID" className="h-40 rounded-lg border border-gray-300 object-cover" /> : null}
+      </Button>
+
+      {value ? <img src={value} alt="Selfie with ID" className="h-40 rounded-xl border border-slate-300 object-cover" /> : null}
       <canvas ref={canvasRef} className="hidden" />
     </div>
-  );
-}
-
-function LeafletMapModal({
-  open,
-  onClose,
-  latitude,
-  longitude,
-  onSave,
-}: {
-  open: boolean;
-  onClose: () => void;
-  latitude: string;
-  longitude: string;
-  onSave: (lat: string, lng: string) => void;
-}) {
-  const mapRef = useRef<HTMLDivElement | null>(null);
-  const instanceRef = useRef<any>(null);
-  const markerRef = useRef<any>(null);
-  const [selectedLat, setSelectedLat] = useState(latitude);
-  const [selectedLng, setSelectedLng] = useState(longitude);
-
-  useEffect(() => {
-    setSelectedLat(latitude);
-    setSelectedLng(longitude);
-  }, [latitude, longitude]);
-
-  useEffect(() => {
-    if (!open || MAP_PROVIDER !== 'leaflet') {
-      return;
-    }
-
-    const setupMap = () => {
-      if (!window.L || !mapRef.current || instanceRef.current) {
-        return;
-      }
-
-      const lat = Number(selectedLat || '14.5995');
-      const lng = Number(selectedLng || '120.9842');
-      const map = window.L.map(mapRef.current).setView([lat, lng], 13);
-      window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '&copy; OpenStreetMap contributors',
-      }).addTo(map);
-
-      markerRef.current = window.L.marker([lat, lng]).addTo(map);
-      map.on('click', (event: any) => {
-        const { lat: newLat, lng: newLng } = event.latlng;
-        markerRef.current.setLatLng([newLat, newLng]);
-        setSelectedLat(String(newLat));
-        setSelectedLng(String(newLng));
-      });
-
-      instanceRef.current = map;
-    };
-
-    if (!window.L) {
-      const cssId = 'leaflet-css';
-      const jsId = 'leaflet-js';
-
-      if (!document.getElementById(cssId)) {
-        const css = document.createElement('link');
-        css.id = cssId;
-        css.rel = 'stylesheet';
-        css.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
-        document.head.appendChild(css);
-      }
-
-      if (!document.getElementById(jsId)) {
-        const script = document.createElement('script');
-        script.id = jsId;
-        script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
-        script.onload = setupMap;
-        document.body.appendChild(script);
-      } else {
-        setupMap();
-      }
-    } else {
-      setupMap();
-    }
-
-    return () => {
-      if (instanceRef.current) {
-        instanceRef.current.remove();
-        instanceRef.current = null;
-        markerRef.current = null;
-      }
-    };
-  }, [open, selectedLat, selectedLng]);
-
-  const useCurrentLocation = () => {
-    navigator.geolocation?.getCurrentPosition(
-      (position) => {
-        const lat = position.coords.latitude;
-        const lng = position.coords.longitude;
-        setSelectedLat(String(lat));
-        setSelectedLng(String(lng));
-        if (markerRef.current) {
-          markerRef.current.setLatLng([lat, lng]);
-        }
-        if (instanceRef.current) {
-          instanceRef.current.setView([lat, lng], 15);
-        }
-      },
-      () => undefined,
-    );
-  };
-
-  if (!open) {
-    return null;
-  }
-
-  return (
-    <Modal title="Choose Business Location" onClose={onClose}>
-      {MAP_PROVIDER === 'leaflet' ? (
-        <div className="space-y-3">
-          <div ref={mapRef} className="h-[360px] w-full rounded-lg border border-gray-300" />
-          <div className="flex flex-wrap items-center gap-2">
-            <button type="button" className="rounded-lg border border-gray-300 px-3 py-2 text-sm" onClick={useCurrentLocation}>
-              Use Current Location
-            </button>
-            <div className="text-xs text-gray-600">Lat: {selectedLat || '-'} | Lng: {selectedLng || '-'}</div>
-          </div>
-        </div>
-      ) : (
-        <div className="space-y-3">
-          <p className="text-sm text-gray-600">Map provider fallback mode is active. Enter coordinates manually.</p>
-          <div className="grid grid-cols-2 gap-2">
-            <input
-              value={selectedLat}
-              onChange={(e) => setSelectedLat(e.target.value)}
-              placeholder="Latitude"
-              className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
-            />
-            <input
-              value={selectedLng}
-              onChange={(e) => setSelectedLng(e.target.value)}
-              placeholder="Longitude"
-              className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
-            />
-          </div>
-        </div>
-      )}
-
-      <div className="mt-4 flex justify-end gap-2">
-        <button type="button" className="rounded-lg border border-gray-300 px-3 py-2 text-sm" onClick={onClose}>
-          Cancel
-        </button>
-        <button
-          type="button"
-          className="rounded-lg bg-primary-500 px-3 py-2 text-sm font-semibold text-white hover:bg-primary-600"
-          onClick={() => {
-            onSave(selectedLat, selectedLng);
-            onClose();
-          }}
-        >
-          Save Coordinates
-        </button>
-      </div>
-    </Modal>
   );
 }
 
@@ -459,6 +361,7 @@ export default function MerchantOnboardingPage() {
   const [formState, setFormState] = useState<OnboardingState>(initialState);
   const [categories, setCategories] = useState<BusinessCategory[]>([]);
   const [businessTypes, setBusinessTypes] = useState<BusinessType[]>([]);
+  const [countryCodes, setCountryCodes] = useState<CountryCodeOption[]>([DEFAULT_PHONE_COUNTRY]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [info, setInfo] = useState('');
@@ -470,37 +373,82 @@ export default function MerchantOnboardingPage() {
   const [selfieFaceValid, setSelfieFaceValid] = useState(false);
   const [uploadingDocTypes, setUploadingDocTypes] = useState<string[]>([]);
   const [profileImageUploading, setProfileImageUploading] = useState(false);
+  const [hasHydrated, setHasHydrated] = useState(false);
   const [profileImagePreviewUrl, setProfileImagePreviewUrl] = useState('');
-  const [phoneCountryCode, setPhoneCountryCode] = useState('+63');
+  const [profileImageFile, setProfileImageFile] = useState<File | null>(null);
+  const [documentPickerFiles, setDocumentPickerFiles] = useState<Record<string, File[]>>({});
+  const [phoneCountryCode, setPhoneCountryCode] = useState(DEFAULT_PHONE_COUNTRY.country_code);
   const [phoneLocalNumber, setPhoneLocalNumber] = useState('');
   const [termsText, setTermsText] = useState('Loading terms...');
   const [privacyText, setPrivacyText] = useState('Loading privacy...');
 
   const stepDocuments = useMemo(() => documentMatrix[formState.business.registration_type], [formState.business.registration_type]);
-  const isGoogleLinked = useMemo(() => Boolean(user?.google_id), [user]);
+  const isGoogleLinked = useMemo(() => hasHydrated && Boolean(user?.google_id), [hasHydrated, user]);
   const passwordStrong = useMemo(() => isStrongPassword(formState.profile.password), [formState.profile.password]);
+
+  const categoryOptions = useMemo(
+    () => categories.map((item) => ({ value: item.id, label: item.name })),
+    [categories],
+  );
+  const businessTypeOptions = useMemo(
+    () =>
+      businessTypes.map((item) => ({
+        value: item.id,
+        label: item.name,
+      })),
+    [businessTypes],
+  );
+  const countryCodeOptions = useMemo(
+    () =>
+      countryCodes.map((country) => ({
+        value: country.country_code,
+        label: `${country.country_name} (${country.country_code})`,
+        countryName: country.country_name,
+        flag: country.country_flag_emoji || '',
+        maxDigits: country.max_digits,
+        isDefault: country.is_default,
+      })),
+    [countryCodes],
+  );
+
+  const persistDraft = useCallback((nextState: OnboardingState) => {
+    if (typeof window !== 'undefined') {
+      window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(nextState));
+    }
+  }, []);
 
   const patchState = useCallback((patch: Partial<OnboardingState>) => {
     setFormState((prev) => {
       const merged = { ...prev, ...patch };
-      if (typeof window !== 'undefined') {
-        window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
+      if (Object.keys(patch).every((key) => Object.is(prev[key as keyof OnboardingState], merged[key as keyof OnboardingState]))) {
+        return prev;
       }
+      persistDraft(merged);
       return merged;
     });
-  }, []);
+  }, [persistDraft]);
 
   const patchNested = useCallback(<K extends keyof OnboardingState>(key: K, patch: Partial<OnboardingState[K]>) => {
     setFormState((prev) => {
+      const currentValue = prev[key] as Record<string, unknown>;
+      const patchEntries = Object.entries(patch as Record<string, unknown>);
+      const hasChanges = patchEntries.some(([entryKey, entryValue]) => !Object.is(currentValue[entryKey], entryValue));
+
+      if (!hasChanges) {
+        return prev;
+      }
+
       const merged = {
         ...prev,
         [key]: { ...prev[key], ...patch },
       };
-      if (typeof window !== 'undefined') {
-        window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
-      }
+      persistDraft(merged);
       return merged;
     });
+  }, [persistDraft]);
+
+  useEffect(() => {
+    setHasHydrated(true);
   }, []);
 
   useEffect(() => {
@@ -516,24 +464,26 @@ export default function MerchantOnboardingPage() {
 
     const bootstrap = async () => {
       try {
+        let sessionState: OnboardingState | null = null;
         const sessionRaw = typeof window !== 'undefined' ? window.sessionStorage.getItem(STORAGE_KEY) : null;
         if (sessionRaw) {
-          const sessionState = JSON.parse(sessionRaw) as OnboardingState;
+          const parsedSessionState = JSON.parse(sessionRaw) as OnboardingState;
+          sessionState = parsedSessionState;
           setFormState((prev) => ({
             ...prev,
-            ...sessionState,
+            ...parsedSessionState,
             profile: {
               ...initialState.profile,
-              ...sessionState.profile,
-              profile_image_url: asSafeString(sessionState?.profile?.profile_image_url),
-              first_name: asSafeString(sessionState?.profile?.first_name),
-              middle_name: asSafeString(sessionState?.profile?.middle_name),
-              last_name: asSafeString(sessionState?.profile?.last_name),
-              email: asSafeString(sessionState?.profile?.email),
-              username: asSafeString(sessionState?.profile?.username),
-              phone_number: asSafeString(sessionState?.profile?.phone_number),
-              password: asSafeString(sessionState?.profile?.password),
-              confirm_password: asSafeString(sessionState?.profile?.confirm_password),
+              ...(parsedSessionState.profile || {}),
+              profile_image_url: asSafeString(parsedSessionState.profile?.profile_image_url),
+              first_name: asSafeString(parsedSessionState.profile?.first_name),
+              middle_name: asSafeString(parsedSessionState.profile?.middle_name),
+              last_name: asSafeString(parsedSessionState.profile?.last_name),
+              email: asSafeString(parsedSessionState.profile?.email),
+              username: asSafeString(parsedSessionState.profile?.username),
+              phone_number: asSafeString(parsedSessionState.profile?.phone_number),
+              password: asSafeString(parsedSessionState.profile?.password),
+              confirm_password: asSafeString(parsedSessionState.profile?.confirm_password),
             },
           }));
         }
@@ -556,8 +506,8 @@ export default function MerchantOnboardingPage() {
             email: asSafeString(payload.profile?.email),
             username: asSafeString(payload.profile?.username),
             phone_number: asSafeString(payload.profile?.phone_number),
-            password: '',
-            confirm_password: '',
+            password: asSafeString(payload.profile?.password) || asSafeString(sessionState?.profile?.password),
+            confirm_password: asSafeString(payload.profile?.confirm_password) || asSafeString(sessionState?.profile?.confirm_password),
           },
           business: payload.business
             ? {
@@ -590,18 +540,7 @@ export default function MerchantOnboardingPage() {
           },
         });
 
-        const profileImageFromState = payload.profile?.profile_image_url || '';
-        setProfileImagePreviewUrl(profileImageFromState);
-
-        const loadedPhone = String(payload.profile?.phone_number || '');
-        const matchedCountry = PHONE_COUNTRY_OPTIONS.find((option) => loadedPhone.startsWith(option.code));
-        if (matchedCountry) {
-          setPhoneCountryCode(matchedCountry.code);
-          setPhoneLocalNumber(loadedPhone.slice(matchedCountry.code.length).replace(/\D/g, ''));
-        } else {
-          setPhoneCountryCode('+63');
-          setPhoneLocalNumber(loadedPhone.replace(/\D/g, ''));
-        }
+        setProfileImagePreviewUrl(payload.profile?.profile_image_url || '');
 
         if (payload.state?.current_step) {
           setCurrentStep(Math.max(0, Math.min(4, Number(payload.state.current_step) - 1)));
@@ -621,12 +560,27 @@ export default function MerchantOnboardingPage() {
   useEffect(() => {
     const loadLookups = async () => {
       try {
-        const categoryResp = await api.get('/merchant/onboarding/categories/');
+        const [categoryResp, countryResp] = await Promise.all([
+          api.get('/merchant/onboarding/categories/'),
+          api.get('/merchant/onboarding/country-codes/'),
+        ]);
+
         setCategories(categoryResp.data || []);
+
+        const loadedCountryCodes = (countryResp.data || []) as CountryCodeOption[];
+        if (loadedCountryCodes.length) {
+          setCountryCodes(loadedCountryCodes);
+          const defaultCountry = loadedCountryCodes.find((country) => country.is_default) || loadedCountryCodes[0];
+          if (!formState.profile.phone_number && defaultCountry) {
+            setPhoneCountryCode(defaultCountry.country_code);
+          }
+        }
       } catch {
         setCategories([]);
+        setCountryCodes([DEFAULT_PHONE_COUNTRY]);
       }
     };
+
     void loadLookups();
   }, []);
 
@@ -677,7 +631,21 @@ export default function MerchantOnboardingPage() {
   }, [formState.profile.username]);
 
   useEffect(() => {
-    const normalizedPhone = `${phoneCountryCode}${phoneLocalNumber}`;
+    const parsed = splitPhoneNumber(formState.profile.phone_number, countryCodes);
+    setPhoneCountryCode((prev) => (prev === parsed.countryCode ? prev : parsed.countryCode));
+    setPhoneLocalNumber((prev) => (prev === parsed.localNumber ? prev : parsed.localNumber));
+  }, [countryCodes, formState.profile.phone_number]);
+
+  useEffect(() => {
+    const maxDigits = getPhoneMaxDigits(phoneCountryCode, countryCodes);
+    setPhoneLocalNumber((prev) => {
+      const trimmed = prev.slice(0, maxDigits);
+      return trimmed === prev ? prev : trimmed;
+    });
+  }, [countryCodes, phoneCountryCode]);
+
+  useEffect(() => {
+    const normalizedPhone = phoneLocalNumber ? `${phoneCountryCode}${phoneLocalNumber}` : '';
     if (formState.profile.phone_number === normalizedPhone) {
       return;
     }
@@ -761,12 +729,16 @@ export default function MerchantOnboardingPage() {
   );
 
   const uploadProfileImage = useCallback(
-    async (file: File) => {
+    async () => {
+      if (!profileImageFile) {
+        return null;
+      }
+
       setProfileImageUploading(true);
       setError('');
       try {
         const formData = new FormData();
-        formData.append('file', file);
+        formData.append('file', profileImageFile);
 
         const response = await api.post('/merchant/onboarding/upload-profile-image/', formData, {
           headers: { 'Content-Type': 'multipart/form-data' },
@@ -779,15 +751,18 @@ export default function MerchantOnboardingPage() {
           throw new Error('Upload response missing image URL.');
         }
 
-        patchNested('profile', { profile_image_url: storagePath });
         setProfileImagePreviewUrl(uploadedUrl);
+        setProfileImageFile(null);
+        patchNested('profile', { profile_image_url: storagePath });
+        return storagePath;
       } catch (err: any) {
         setError(err?.response?.data?.message || 'Unable to upload profile image.');
+        throw err;
       } finally {
         setProfileImageUploading(false);
       }
     },
-    [patchNested],
+    [patchNested, profileImageFile],
   );
 
   const validateCurrentStep = (): string | null => {
@@ -801,7 +776,7 @@ export default function MerchantOnboardingPage() {
 
     if (currentStep === 0) {
       const p = formState.profile;
-      if (!p.profile_image_url || !p.first_name || !p.last_name || !p.email || !p.username || !p.phone_number) {
+      if (!p.first_name || !p.last_name || !p.email || !p.username || !p.phone_number) {
         return 'Please complete all required profile fields.';
       }
       if (!p.password || !p.confirm_password) {
@@ -874,7 +849,12 @@ export default function MerchantOnboardingPage() {
 
   const saveCurrentStep = async () => {
     if (currentStep === 0) {
-      await api.post('/merchant/onboarding/step/profile/', formState.profile);
+      const profilePayload = { ...formState.profile };
+      const uploadedPath = await uploadProfileImage();
+      if (uploadedPath) {
+        profilePayload.profile_image_url = uploadedPath;
+      }
+      await api.post('/merchant/onboarding/step/profile/', profilePayload);
     }
     if (currentStep === 1) {
       await api.post('/merchant/onboarding/step/business/', formState.business);
@@ -975,295 +955,220 @@ export default function MerchantOnboardingPage() {
     }
   };
 
-  const renderProfileStep = () => (
-    <div className="grid gap-3 md:grid-cols-2">
-      <div className="text-sm text-gray-700 md:col-span-2 rounded-lg border border-gray-300 bg-white p-3">
-        <p className="font-medium text-gray-900">Profile image *</p>
-        <p className="mt-1 text-xs text-gray-500">A clear profile image is required before you can continue.</p>
-        <input
-          type="file"
-          accept="image/png,image/jpeg,image/webp"
-          onChange={(e) => {
-            const file = e.target.files?.[0];
-            if (!file) {
-              return;
-            }
-            const maxSize = 5 * 1024 * 1024;
-            if (file.size > maxSize) {
-              setError('Profile image exceeds 5MB size limit.');
-              return;
-            }
-            void uploadProfileImage(file);
-          }}
-          className="mt-2 block w-full text-sm text-gray-600"
-        />
-        {profileImageUploading ? <p className="mt-2 text-xs text-blue-600">Uploading profile image...</p> : null}
-        {profileImagePreviewUrl || formState.profile.profile_image_url ? (
-          <img
-            src={profileImagePreviewUrl || formState.profile.profile_image_url}
-            alt="Profile preview"
-            className="mt-3 h-32 w-32 rounded-lg border border-gray-300 object-cover"
-          />
-        ) : null}
-      </div>
+  const renderProfileStep = () => {
+    const initials = profileInitials(formState.profile.first_name, formState.profile.last_name);
 
-      <label className="text-sm text-gray-700">
-        First name *
-        <input
+    return (
+      <div className="grid gap-4 md:grid-cols-2">
+        <div className="md:col-span-2 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          <p className="mb-2 text-sm font-semibold text-slate-800">Profile image (optional)</p>
+          <p className="mb-3 text-xs text-slate-500">If no image is uploaded, your account will use initials until you add one later.</p>
+
+          <ProfileImageUpload
+            label=""
+            file={profileImageFile}
+            initials={initials}
+            remoteImageUrl={profileImagePreviewUrl || formState.profile.profile_image_url}
+            onFileChange={(file) => {
+              if (!file) {
+                setProfileImageFile(null);
+                return;
+              }
+
+              const maxSize = 5 * 1024 * 1024;
+              if (file.size > maxSize) {
+                setError('Profile image exceeds 5MB size limit.');
+                return;
+              }
+
+              setError('');
+              setProfileImageFile(file);
+            }}
+          />
+
+          {profileImageUploading ? (
+            <p className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-primary-700">
+              <Loader2 size={12} className="animate-spin" />
+              Uploading profile image...
+            </p>
+          ) : profileImageFile ? (
+            <p className="mt-2 text-xs font-medium text-primary-700">Image preview is ready. File will be saved when you click Next.</p>
+          ) : null}
+        </div>
+
+        <Input
+          label="First name *"
+          placeholder="Enter your first name"
           value={formState.profile.first_name}
           onChange={(e) => patchNested('profile', { first_name: e.target.value })}
-          className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
         />
-      </label>
 
-      <label className="text-sm text-gray-700">
-        Middle name
-        <input
+        <Input
+          label="Middle name"
+          placeholder="Enter your middle name (optional)"
           value={formState.profile.middle_name}
           onChange={(e) => patchNested('profile', { middle_name: e.target.value })}
-          className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
         />
-      </label>
 
-      <label className="text-sm text-gray-700">
-        Last name *
-        <input
+        <Input
+          label="Last name *"
+          placeholder="Enter your last name"
           value={formState.profile.last_name}
           onChange={(e) => patchNested('profile', { last_name: e.target.value })}
-          className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
         />
-      </label>
 
-      <label className="text-sm text-gray-700">
-        Email * {isGoogleLinked ? '(read-only for Google-linked account)' : ''}
-        <input
+        <Input
+          label="Email *"
+          placeholder="Enter your email address"
           value={formState.profile.email}
           readOnly={isGoogleLinked}
           onChange={(e) => patchNested('profile', { email: e.target.value })}
-          className={`mt-1 w-full rounded-lg px-3 py-2 text-sm ${
-            isGoogleLinked ? 'border border-gray-200 bg-gray-100' : 'border border-gray-300'
-          }`}
+          hint={isGoogleLinked ? 'Read-only for Google-linked account.' : undefined}
+          className={isGoogleLinked ? 'bg-slate-100' : ''}
         />
-      </label>
 
-      <label className="text-sm text-gray-700">
-        Username *
-        <input
+        <Input
+          label="Username *"
+          placeholder="Choose a unique username"
           value={asSafeString(formState.profile.username)}
           onChange={(e) => patchNested('profile', { username: e.target.value })}
-          className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+          hint={
+            usernameAvailability === 'checking'
+              ? 'Checking username...'
+              : usernameAvailability === 'available'
+              ? 'Username is available'
+              : usernameAvailability === 'taken'
+              ? 'Username is already taken'
+              : 'Enter a username to check availability'
+          }
+          error={usernameAvailability === 'taken' ? 'This username is already in use.' : undefined}
         />
-        <span className="mt-1 block text-xs text-gray-500">
-          {usernameAvailability === 'checking'
-            ? 'Checking username...'
-            : usernameAvailability === 'available'
-            ? 'Username is available'
-            : usernameAvailability === 'taken'
-            ? 'Username is already taken'
-            : 'Enter a username to check availability'}
-        </span>
-      </label>
 
-      <label className="text-sm text-gray-700">
-        Phone number *
-        <div className="mt-1 flex gap-2">
-          <select
-            value={phoneCountryCode}
-            onChange={(e) => setPhoneCountryCode(e.target.value)}
-            className="w-32 rounded-lg border border-gray-300 px-2 py-2 text-sm"
-          >
-            {PHONE_COUNTRY_OPTIONS.map((option) => (
-              <option key={option.code} value={option.code}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-          <input
-            value={phoneLocalNumber}
-            onChange={(e) => setPhoneLocalNumber(e.target.value.replace(/\D/g, '').slice(0, 15))}
-            className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm"
-            placeholder="9123456789"
+        <PhoneNumberInput
+          label="Phone number *"
+          countryCode={phoneCountryCode}
+          phone={phoneLocalNumber}
+          countries={countryCodeOptions}
+          onCountryCodeChange={(value) => setPhoneCountryCode(value)}
+          onPhoneChange={(value) => setPhoneLocalNumber(value)}
+          placeholder="Enter your mobile number"
+        />
+
+        <div className="md:col-span-2 grid gap-4 md:grid-cols-2">
+          <PasswordInput
+            value={formState.profile.password}
+            onChange={(value) => patchNested('profile', { password: value })}
+            hint={passwordStrong ? 'Password meets all complexity requirements.' : undefined}
+          />
+          <ConfirmPasswordInput
+            password={formState.profile.password}
+            confirmPassword={formState.profile.confirm_password}
+            onChange={(value) => patchNested('profile', { confirm_password: value })}
           />
         </div>
-      </label>
+      </div>
+    );
+  };
 
-      <label className="text-sm text-gray-700">
-        Password *
-        <input
-          type="password"
-          value={formState.profile.password}
-          onChange={(e) => patchNested('profile', { password: e.target.value })}
-          className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-          placeholder="At least 8 chars, upper/lower/number/special"
-        />
-        <span className={`mt-1 block text-xs ${passwordStrong ? 'text-emerald-600' : 'text-gray-500'}`}>
-          {passwordStrong
-            ? 'Password meets complexity requirements.'
-            : 'Password must include uppercase, lowercase, number, and special character.'}
-        </span>
-      </label>
-
-      <label className="text-sm text-gray-700">
-        Confirm password *
-        <input
-          type="password"
-          value={formState.profile.confirm_password}
-          onChange={(e) => patchNested('profile', { confirm_password: e.target.value })}
-          className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-        />
-        <span className={`mt-1 block text-xs ${
-          formState.profile.confirm_password && formState.profile.confirm_password !== formState.profile.password
-            ? 'text-red-600'
-            : 'text-gray-500'
-        }`}>
-          {formState.profile.confirm_password && formState.profile.confirm_password !== formState.profile.password
-            ? 'Passwords do not match.'
-            : 'Re-enter your password to confirm.'}
-        </span>
-      </label>
-    </div>
-  );
-
-  const renderBusinessStep = () => (
-    <div className="grid gap-3">
-      <label className="text-sm text-gray-700">
-        Business name *
-        <input
+  const renderBusinessStep = () => {
+    return (
+      <div className="grid gap-4">
+        <Input
+          label="Business name *"
+          placeholder="Enter your registered or trade business name"
           value={formState.business.business_name}
           onChange={(e) => patchNested('business', { business_name: e.target.value })}
-          className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
         />
-      </label>
 
-      <label className="text-sm text-gray-700">
-        Business category *
-        <select
-          multiple
+        <MultiSelectDropdown
+          label="Business category *"
           value={formState.business.category_ids}
-          onChange={(e) => {
-            const selected = Array.from(e.target.selectedOptions).map((opt) => opt.value);
-            patchNested('business', { category_ids: selected, business_type_ids: [] });
-          }}
-          className="mt-1 h-36 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-        >
-          {categories.map((item) => (
-            <option key={item.id} value={item.id}>
-              {item.name}
-            </option>
-          ))}
-        </select>
-      </label>
+          options={categoryOptions}
+          onChange={(value) => patchNested('business', { category_ids: value, business_type_ids: [] })}
+          placeholder="Select one or more categories"
+        />
 
-      <label className="text-sm text-gray-700">
-        Business type *
-        <select
-          multiple
+        <MultiSelectDropdown
+          label="Business type *"
           value={formState.business.business_type_ids}
-          onChange={(e) => {
-            const selected = Array.from(e.target.selectedOptions).map((opt) => opt.value);
-            patchNested('business', { business_type_ids: selected });
-          }}
-          className="mt-1 h-36 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-        >
-          {businessTypes.map((item) => (
-            <option key={item.id} value={item.id}>
-              {item.name}
-            </option>
-          ))}
-        </select>
-      </label>
+          options={businessTypeOptions}
+          onChange={(value) => patchNested('business', { business_type_ids: value })}
+          placeholder={
+            formState.business.category_ids.length
+              ? 'Select one or more business types'
+              : 'Select categories first'
+          }
+          disabled={!formState.business.category_ids.length}
+        />
 
-      <label className="text-sm text-gray-700">
-        Business registration *
-        <select
+        <Dropdown
+          label="Business registration *"
           value={formState.business.registration_type}
-          onChange={(e) => patchNested('business', { registration_type: e.target.value as RegistrationType })}
-          className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-        >
-          <option value="UNREGISTERED">Unregistered</option>
-          <option value="REGISTERED_NON_VAT">Registered (NON VAT)</option>
-          <option value="REGISTERED_VAT">Registered (VAT Included)</option>
-        </select>
-      </label>
-    </div>
-  );
+          options={[
+            { value: 'UNREGISTERED', label: 'Unregistered' },
+            { value: 'REGISTERED_NON_VAT', label: 'Registered (Non-VAT)' },
+            { value: 'REGISTERED_VAT', label: 'Registered (VAT Included)' },
+          ]}
+          onChange={(value) => patchNested('business', { registration_type: value as RegistrationType })}
+        />
+      </div>
+    );
+  };
 
   const renderLocationStep = () => (
-    <div className="grid gap-3 md:grid-cols-2">
-      <label className="text-sm text-gray-700">
-        House number *
-        <input
-          value={formState.location.house_number}
-          onChange={(e) => patchNested('location', { house_number: e.target.value })}
-          className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-        />
-      </label>
-      <label className="text-sm text-gray-700">
-        Street name *
-        <input
-          value={formState.location.street_name}
-          onChange={(e) => patchNested('location', { street_name: e.target.value })}
-          className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-        />
-      </label>
-      <label className="text-sm text-gray-700">
-        Barangay *
-        <input
-          value={formState.location.barangay}
-          onChange={(e) => patchNested('location', { barangay: e.target.value })}
-          className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-        />
-      </label>
-      <label className="text-sm text-gray-700">
-        City / Municipality *
-        <input
-          value={formState.location.city_municipality}
-          onChange={(e) => patchNested('location', { city_municipality: e.target.value })}
-          className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-        />
-      </label>
-      <label className="text-sm text-gray-700">
-        Province *
-        <input
-          value={formState.location.province}
-          onChange={(e) => patchNested('location', { province: e.target.value })}
-          className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-        />
-      </label>
-      <label className="text-sm text-gray-700">
-        Zip code *
-        <input
-          value={formState.location.zip_code}
-          onChange={(e) => patchNested('location', { zip_code: e.target.value })}
-          className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-        />
-      </label>
+    <div className="grid gap-4 md:grid-cols-2">
+      <Input
+        label="House number *"
+        placeholder="House number, block, or lot"
+        value={formState.location.house_number}
+        onChange={(e) => patchNested('location', { house_number: e.target.value })}
+      />
+      <Input
+        label="Street name *"
+        placeholder="Street, subdivision, or zone"
+        value={formState.location.street_name}
+        onChange={(e) => patchNested('location', { street_name: e.target.value })}
+      />
+      <Input
+        label="Barangay *"
+        placeholder="Enter barangay"
+        value={formState.location.barangay}
+        onChange={(e) => patchNested('location', { barangay: e.target.value })}
+      />
+      <Input
+        label="City / Municipality *"
+        placeholder="Enter city or municipality"
+        value={formState.location.city_municipality}
+        onChange={(e) => patchNested('location', { city_municipality: e.target.value })}
+      />
+      <Input
+        label="Province *"
+        placeholder="Enter province"
+        value={formState.location.province}
+        onChange={(e) => patchNested('location', { province: e.target.value })}
+      />
+      <Input
+        label="Zip code *"
+        placeholder="e.g., 4103"
+        value={formState.location.zip_code}
+        onChange={(e) => patchNested('location', { zip_code: e.target.value })}
+      />
 
-      <label className="text-sm text-gray-700">
-        Latitude *
-        <input value={formState.location.latitude} readOnly className="mt-1 w-full rounded-lg border border-gray-200 bg-gray-100 px-3 py-2 text-sm" />
-      </label>
-      <label className="text-sm text-gray-700">
-        Longitude *
-        <input value={formState.location.longitude} readOnly className="mt-1 w-full rounded-lg border border-gray-200 bg-gray-100 px-3 py-2 text-sm" />
-      </label>
+      <Input label="Latitude *" value={formState.location.latitude} readOnly className="bg-slate-100" />
+      <Input label="Longitude *" value={formState.location.longitude} readOnly className="bg-slate-100" />
 
       <div className="md:col-span-2">
-        <button
-          type="button"
-          className="rounded-lg border border-gray-300 px-3 py-2 text-sm hover:bg-gray-50"
-          onClick={() => setShowMap(true)}
-        >
+        <Button type="button" variant="secondary" onClick={() => setShowMap(true)}>
           Choose Location on Map
-        </button>
+        </Button>
       </div>
     </div>
   );
 
   const renderDocumentsStep = () => (
     <div className="space-y-4">
-      <div className="rounded-lg border border-gray-300 bg-white p-3">
-        <h4 className="font-semibold text-gray-900 mb-2">Selfie with ID *</h4>
+      <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+        <h4 className="mb-2 font-semibold text-slate-900">Selfie with ID *</h4>
         <SelfieCapture
           value={formState.documents.selfie_with_id}
           onCapture={(dataUrl, detected) => {
@@ -1280,28 +1185,34 @@ export default function MerchantOnboardingPage() {
           }}
         />
         {uploadingDocTypes.includes('SELFIE_WITH_ID') ? (
-          <p className="mt-2 text-xs text-blue-600">Uploading selfie with ID...</p>
+          <p className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-primary-700">
+            <Loader2 size={12} className="animate-spin" />
+            Uploading selfie with ID...
+          </p>
         ) : null}
       </div>
 
-      <div className="space-y-2">
+      <div className="space-y-3">
         {stepDocuments
           .filter((item) => item.type !== 'SELFIE_WITH_ID')
           .map((item) => {
             const existing = formState.documents.items.find((entry) => entry.document_type === item.type);
             return (
-              <div key={item.type} className="rounded-lg border border-gray-300 bg-white p-3">
-                <label className="text-sm font-medium text-gray-700 block mb-2">
-                  {item.label} {item.required ? '*' : '(Optional)'}
-                </label>
-                <input
-                  type="file"
+              <div key={item.type} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                <FileUpload
+                  label={`${item.label} ${item.required ? '*' : '(Optional)'}`}
+                  files={documentPickerFiles[item.type] || []}
+                  multiple={false}
                   accept=".jpg,.jpeg,.png,.webp,.pdf"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
+                  onFilesChange={(files) => {
+                    const selected = files.slice(0, 1);
+                    setDocumentPickerFiles((prev) => ({ ...prev, [item.type]: selected }));
+
+                    const file = selected[0];
                     if (!file) {
                       return;
                     }
+
                     const maxSize = 5 * 1024 * 1024;
                     if (file.size > maxSize) {
                       setError(`${item.label} exceeds 5MB size limit.`);
@@ -1309,11 +1220,16 @@ export default function MerchantOnboardingPage() {
                     }
                     void uploadDocument(item.type, file, !item.required);
                   }}
-                  className="block w-full text-sm text-gray-600"
                 />
-                <p className="mt-2 text-xs text-gray-500">{existing ? `Uploaded: ${existing.file_url}` : 'No file uploaded.'}</p>
+
+                <p className="mt-2 text-xs text-slate-500">
+                  {existing ? `Uploaded: ${existing.file_url}` : 'No file uploaded yet.'}
+                </p>
                 {uploadingDocTypes.includes(item.type) ? (
-                  <p className="mt-1 text-xs text-blue-600">Uploading...</p>
+                  <p className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-primary-700">
+                    <Loader2 size={12} className="animate-spin" />
+                    Uploading...
+                  </p>
                 ) : null}
               </div>
             );
@@ -1324,79 +1240,71 @@ export default function MerchantOnboardingPage() {
 
   const renderVerificationStep = () => (
     <div className="space-y-4">
-      <div className="rounded-lg border border-gray-200 bg-white p-3">
-        <h4 className="font-semibold text-gray-900">Summary</h4>
-        <p className="mt-2 text-sm text-gray-600">Review your profile, business, location, and document entries before final submission.</p>
+      <div className="rounded-xl border border-slate-200 bg-gradient-to-br from-white to-primary-50/40 p-4">
+        <h4 className="inline-flex items-center gap-2 font-semibold text-slate-900">
+          <ShieldCheck size={16} className="text-primary-600" />
+          Final Review
+        </h4>
+        <p className="mt-2 text-sm text-slate-600">
+          Review your profile, business, location, and document entries before final submission.
+        </p>
       </div>
 
-      <button
-        type="button"
-        className="rounded-lg border border-gray-300 px-3 py-2 text-sm hover:bg-gray-50"
-        onClick={requestVerificationOtp}
-      >
+      <Button type="button" variant="secondary" onClick={requestVerificationOtp}>
         Send / Resend OTP
-      </button>
+      </Button>
 
-      <div className="grid gap-3 md:grid-cols-2">
-        <label className="text-sm text-gray-700">
-          Email OTP *
-          <input
-            value={formState.verification.email_otp}
-            onChange={(e) => patchNested('verification', { email_otp: e.target.value })}
-            className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-          />
-        </label>
-        <label className="text-sm text-gray-700">
-          Phone OTP *
-          <input
-            value={formState.verification.phone_otp}
-            onChange={(e) => patchNested('verification', { phone_otp: e.target.value })}
-            className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-          />
-        </label>
+      <div className="grid gap-4 md:grid-cols-2">
+        <Input
+          label="Email OTP *"
+          placeholder="Enter the 6-digit email OTP"
+          value={formState.verification.email_otp}
+          onChange={(e) => patchNested('verification', { email_otp: e.target.value })}
+        />
+        <Input
+          label="Phone OTP *"
+          placeholder="Enter the 6-digit SMS OTP"
+          value={formState.verification.phone_otp}
+          onChange={(e) => patchNested('verification', { phone_otp: e.target.value })}
+        />
       </div>
 
-      <div className="space-y-2 text-sm">
-        <label className="flex items-center gap-2">
-          <input
-            type="checkbox"
-            checked={formState.verification.terms_accepted}
-            onChange={(e) => patchNested('verification', { terms_accepted: e.target.checked })}
-          />
-          <span>
-            I agree to the{' '}
-            <button type="button" className="text-primary-600 underline" onClick={() => setShowTermsModal(true)}>
-              Terms and Conditions
-            </button>
-            {' '}and acknowledge legal review is required.
-          </span>
-        </label>
-        <label className="flex items-center gap-2">
-          <input
-            type="checkbox"
-            checked={formState.verification.privacy_accepted}
-            onChange={(e) => patchNested('verification', { privacy_accepted: e.target.checked })}
-          />
-          <span>
-            I agree to the{' '}
-            <button type="button" className="text-primary-600 underline" onClick={() => setShowPrivacyModal(true)}>
-              Privacy Policy
-            </button>
-            {' '}and acknowledge legal review is required.
-          </span>
-        </label>
+      <div className="space-y-3">
+        <Checkbox
+          checked={formState.verification.terms_accepted}
+          onChange={(e) => patchNested('verification', { terms_accepted: e.target.checked })}
+          label="I agree to the Terms and Conditions"
+          description="Acceptance is required before merchant onboarding submission."
+        />
+        <button type="button" className="text-sm font-medium text-primary-700 underline" onClick={() => setShowTermsModal(true)}>
+          View Terms and Conditions
+        </button>
+
+        <Checkbox
+          checked={formState.verification.privacy_accepted}
+          onChange={(e) => patchNested('verification', { privacy_accepted: e.target.checked })}
+          label="I agree to the Privacy Policy"
+          description="You acknowledge data handling requirements for onboarding."
+        />
+        <button type="button" className="text-sm font-medium text-primary-700 underline" onClick={() => setShowPrivacyModal(true)}>
+          View Privacy Policy
+        </button>
       </div>
     </div>
   );
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4 md:p-8">
-      <div className="mx-auto w-full max-w-5xl">
-        <h1 className="mb-2 text-2xl font-bold text-gray-900">Merchant Setup Wizard</h1>
-        <p className="mb-6 text-sm text-gray-600">Complete all 5 steps. Final data submission happens only at Step 5.</p>
+    <div className="min-h-screen bg-[radial-gradient(circle_at_top,_#f8fbff_0%,_#f3f6fb_50%,_#eef2f8_100%)] p-4 md:p-8">
+      <div className="mx-auto w-full max-w-6xl">
+        <div className="mb-6">
+          <h1 className="text-3xl font-bold text-slate-900">Merchant Setup Wizard</h1>
+          <p className="mt-1 text-sm text-slate-600">Complete all 5 steps. Final data submission happens only at Step 5.</p>
+        </div>
 
-        {error ? <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-600">{error}</div> : null}
-        {info ? <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm text-emerald-700">{info}</div> : null}
+        {error ? <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700">{error}</div> : null}
+        {info ? (
+          <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm text-emerald-700">{info}</div>
+        ) : null}
 
         <Wizard
           steps={steps}
@@ -1409,7 +1317,7 @@ export default function MerchantOnboardingPage() {
           onNext={onNext}
           onPrevious={onPrevious}
           onSubmit={onSubmit}
-          submitting={saving || uploadingDocTypes.length > 0}
+          submitting={saving || uploadingDocTypes.length > 0 || profileImageUploading}
         >
           {currentStep === 0 ? renderProfileStep() : null}
           {currentStep === 1 ? renderBusinessStep() : null}
@@ -1419,11 +1327,12 @@ export default function MerchantOnboardingPage() {
         </Wizard>
       </div>
 
-      <LeafletMapModal
+      <MapPickerModal
         open={showMap}
         onClose={() => setShowMap(false)}
         latitude={formState.location.latitude}
         longitude={formState.location.longitude}
+        provider={MAP_PROVIDER === 'leaflet' ? 'leaflet' : 'manual'}
         onSave={(lat, lng) => patchNested('location', { latitude: lat, longitude: lng })}
       />
 
@@ -1443,12 +1352,13 @@ export default function MerchantOnboardingPage() {
         <Modal title="Confirm Submission" onClose={() => setShowSubmitConfirm(false)}>
           <p>Are you sure you want to submit your application? You will not be able to edit your information after submission.</p>
           <div className="mt-4 flex justify-end gap-2">
-            <button className="rounded-lg border border-gray-300 px-3 py-2 text-sm" onClick={() => setShowSubmitConfirm(false)}>
+            <Button type="button" variant="secondary" onClick={() => setShowSubmitConfirm(false)}>
               Cancel
-            </button>
-            <button className="rounded-lg bg-primary-500 px-3 py-2 text-sm font-semibold text-white" onClick={confirmSubmit}>
+            </Button>
+            <Button type="button" onClick={confirmSubmit}>
+              <CheckCircle2 size={16} />
               Confirm Submit
-            </button>
+            </Button>
           </div>
         </Modal>
       ) : null}
