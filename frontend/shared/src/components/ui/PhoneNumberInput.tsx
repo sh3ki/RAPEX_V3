@@ -10,6 +10,7 @@ interface PhoneCountryOption {
   value: string;
   countryName?: string;
   flag?: string;
+  shortCode?: string;
   maxDigits?: number;
   isDefault?: boolean;
 }
@@ -40,6 +41,32 @@ interface PhoneNumberInputProps {
   disabled?: boolean;
 }
 
+function toShortCode(option: PhoneCountryOption): string {
+  const explicit = (option.shortCode || '').trim().toUpperCase();
+  if (explicit) {
+    return explicit;
+  }
+
+  const flagCode = (option.flag || '').trim().toUpperCase();
+  if (/^[A-Z]{2}$/.test(flagCode)) {
+    return flagCode;
+  }
+
+  const countryName = (option.countryName || option.label || '').trim();
+  if (!countryName) {
+    return 'NA';
+  }
+
+  const words = countryName.match(/[A-Za-z]+/g) || [];
+  if (words.length >= 2) {
+    const firstWord = words[0] || '';
+    const secondWord = words[1] || '';
+    return `${firstWord.charAt(0)}${secondWord.charAt(0)}`.toUpperCase();
+  }
+  const firstWord = words[0] || '';
+  return firstWord.slice(0, 2).toUpperCase();
+}
+
 export function PhoneNumberInput({
   label,
   countryCode,
@@ -58,6 +85,7 @@ export function PhoneNumberInput({
       maxDigits: option.maxDigits ?? 15,
       countryName: option.countryName || option.label,
       flag: option.flag || '',
+      shortCode: option.shortCode || '',
     }));
 
     const sorted = [...fromProps].sort((a, b) => {
@@ -78,11 +106,10 @@ export function PhoneNumberInput({
 
   const dropdownOptions = useMemo<SelectOption[]>(() => {
     return options.map((country) => {
-      const shortCode = (country.flag || country.countryName || country.label).slice(0, 2).toUpperCase();
-      const countryLabel = country.countryName || country.label;
+      const shortCode = toShortCode(country);
       return {
         value: country.value,
-        label: `${shortCode} ${countryLabel} (${country.value})`,
+        label: `${shortCode} (${country.value})`,
       };
     });
   }, [options]);
@@ -97,6 +124,7 @@ export function PhoneNumberInput({
             value={countryCode}
             onChange={onCountryCodeChange}
             disabled={disabled}
+            error={error}
             searchThreshold={6}
             placeholder="Country code"
           />
