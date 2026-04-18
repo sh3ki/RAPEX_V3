@@ -9,6 +9,7 @@ interface PasswordInputProps {
   value: string;
   onChange: (value: string) => void;
   hint?: string;
+  error?: string;
   disabled?: boolean;
 }
 
@@ -17,6 +18,7 @@ interface ConfirmPasswordInputProps {
   password: string;
   confirmPassword: string;
   onChange: (value: string) => void;
+  error?: string;
   disabled?: boolean;
 }
 
@@ -48,6 +50,7 @@ export function PasswordInput({
   value,
   onChange,
   hint,
+  error,
   disabled = false,
 }: PasswordInputProps) {
   const [show, setShow] = useState(false);
@@ -74,6 +77,7 @@ export function PasswordInput({
           </button>
         }
         hint={hint}
+        error={error}
       />
 
       <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
@@ -109,6 +113,7 @@ export function ConfirmPasswordInput({
   password,
   confirmPassword,
   onChange,
+  error,
   disabled = false,
 }: ConfirmPasswordInputProps) {
   const [show, setShow] = useState(false);
@@ -140,7 +145,7 @@ export function ConfirmPasswordInput({
           ? 'Passwords match.'
           : 'Passwords do not match.'
       }
-      error={hasValue && !matches ? 'Passwords do not match.' : undefined}
+      error={error || (hasValue && !matches ? 'Passwords do not match.' : undefined)}
     />
   );
 }
