@@ -13,9 +13,9 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 const variantMap: Record<ButtonVariant, string> = {
-  primary: 'bg-primary-500 hover:bg-primary-600 text-white border border-primary-500',
-  secondary: 'bg-white hover:bg-gray-50 text-gray-700 border border-gray-300',
-  ghost: 'bg-transparent hover:bg-gray-100 text-gray-700 border border-transparent',
+  primary: 'bg-gradient-to-r from-primary-500 to-indigo-500 hover:from-primary-600 hover:to-indigo-600 text-white border border-primary-500 shadow-sm',
+  secondary: 'bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 shadow-sm',
+  ghost: 'bg-transparent hover:bg-slate-100 text-slate-700 border border-transparent',
   danger: 'bg-red-500 hover:bg-red-600 text-white border border-red-500',
 };
 
@@ -33,7 +33,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
     <button
       ref={ref}
       className={cn(
-        'inline-flex items-center justify-center gap-2 rounded-lg font-semibold transition-colors',
+        'inline-flex items-center justify-center gap-2 rounded-xl font-semibold transition-all',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/30',
         'disabled:cursor-not-allowed disabled:opacity-60',
         variantMap[variant],
