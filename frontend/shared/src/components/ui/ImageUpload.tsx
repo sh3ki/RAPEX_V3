@@ -2,7 +2,7 @@
 
 import { Image as ImageIcon, Upload, X } from 'lucide-react';
 import Image from 'next/image';
-import { useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 
 interface ImageUploadProps {
   label?: string;
@@ -26,6 +26,12 @@ export function ImageUpload({
     }));
   }, [files]);
 
+  useEffect(() => {
+    return () => {
+      previews.forEach((preview) => URL.revokeObjectURL(preview.url));
+    };
+  }, [previews]);
+
   function addFiles(newFiles: FileList | null): void {
     if (!newFiles) {
       return;
@@ -37,7 +43,7 @@ export function ImageUpload({
 
   return (
     <div className="space-y-2">
-      {label ? <label className="text-sm font-medium text-gray-700">{label}</label> : null}
+      {label ? <label className="text-sm font-semibold text-slate-700">{label}</label> : null}
       <div
         role="button"
         tabIndex={0}
@@ -53,10 +59,11 @@ export function ImageUpload({
           event.preventDefault();
           addFiles(event.dataTransfer.files);
         }}
-        className="rounded-xl border-2 border-dashed border-gray-300 bg-gray-50 p-6 text-center text-sm text-gray-500"
+        className="rounded-2xl border-2 border-dashed border-slate-300 bg-gradient-to-br from-white to-slate-50 p-6 text-center text-sm text-slate-500 transition-colors hover:border-primary-400 hover:bg-primary-50/30"
       >
-        <Upload className="mx-auto mb-2 text-gray-400" size={22} />
-        Drag and drop images here, or click to browse
+        <Upload className="mx-auto mb-2 text-slate-400" size={22} />
+        <p className="font-semibold text-slate-700">Drop images here or click to browse</p>
+        <p className="mt-1 text-xs text-slate-500">PNG, JPEG, and WEBP are supported.</p>
       </div>
       <input
         ref={inputRef}
@@ -68,7 +75,7 @@ export function ImageUpload({
       />
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
         {previews.map((preview, index) => (
-          <div key={`${preview.file.name}-${index}`} className="relative overflow-hidden rounded-lg border border-gray-200 bg-white">
+          <div key={`${preview.file.name}-${index}`} className="relative overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
             <Image
               src={preview.url}
               alt={preview.file.name}
@@ -77,7 +84,7 @@ export function ImageUpload({
               className="h-28 w-full object-cover"
               unoptimized
             />
-            <div className="flex items-center justify-between border-t border-gray-100 px-2 py-1.5 text-xs text-gray-600">
+            <div className="flex items-center justify-between border-t border-slate-100 px-2 py-1.5 text-xs text-slate-600">
               <div className="flex items-center gap-1 truncate">
                 <ImageIcon size={12} />
                 <span className="truncate">{preview.file.name}</span>
@@ -85,7 +92,7 @@ export function ImageUpload({
               <button
                 type="button"
                 onClick={() => onFilesChange(files.filter((_, i) => i !== index))}
-                className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+                className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
               >
                 <X size={12} />
               </button>
