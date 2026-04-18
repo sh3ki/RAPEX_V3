@@ -78,6 +78,22 @@ class MerchantMarkupOverride(BaseModel):
         return f"Override for {self.merchant} ({self.store_type or 'ALL'})"
 
 
+class MerchantCountryCode(BaseModel):
+    country_name = models.CharField(max_length=120, unique=True)
+    country_code = models.CharField(max_length=8, unique=True)
+    country_flag_emoji = models.CharField(max_length=8, blank=True, default='')
+    max_digits = models.PositiveSmallIntegerField(default=10)
+    is_default = models.BooleanField(default=False)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        db_table = 'merchant_country_codes'
+        ordering = ['-is_default', 'country_name']
+
+    def __str__(self):
+        return f"{self.country_name} ({self.country_code})"
+
+
 class MerchantBusinessCategory(BaseModel):
     name = models.CharField(max_length=120, unique=True)
     is_active = models.BooleanField(default=True)
