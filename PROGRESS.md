@@ -1,7 +1,7 @@
 # RAPEX Technologies OPC — FULL PROJECT PROGRESS TRACKER
 
 > **Last Updated:** April 18, 2026  
-> **Updated By:** GitHub Copilot (onboarding stability + hydration safety + deferred profile image upload)  
+> **Updated By:** GitHub Copilot (onboarding validation/toast pass + phone sync hardening + wizard/dropdown alignment)  
 > **Version:** 1.0 MVP  
 > **Overall Progress (estimated from implemented code):** ![59%](https://progress-bar.xyz/59)
 
@@ -77,10 +77,17 @@
 - [x] Merchant onboarding lookup data verified and populated in Docker DB (`categories=4`, `business_types=22`, `country_codes=8`)
 - [x] Merchant onboarding nested state patching now ignores no-op updates to prevent recursive render loops in profile/location/phone sync
 - [x] Merchant onboarding email field rendering is deterministic (static label + contextual hint) to reduce hydration mismatch risk
-- [x] Merchant onboarding phone country selector now uses shared dropdown styling and formatted options (`flag + country + code`)
+- [x] Merchant onboarding phone country selector now uses shared dropdown styling and formatted options (`short code + dial code`, no emoji flags)
 - [x] Merchant onboarding profile image UI extracted to shared component with inline preview and upload-on-next persistence behavior
-- [x] Shared dropdown and multiselect overlays constrained with improved z-index/max-height to prevent wizard overflow clipping
-- [x] Wizard step icon alignment centered and onboarding input placeholders standardized for predictable UX
+- [x] Shared dropdown and multiselect menus constrained inside onboarding container bounds with stable max-height behavior
+- [x] Wizard step icons and connector alignment centered for non-final steps and onboarding placeholders standardized
+- [x] Merchant onboarding now exposes a logout action that clears auth/session state and onboarding draft cache
+- [x] Profile image helper copy now matches upload guidance requirement (`Drop images here or click to browse. PNG, JPEG, and WEBP are supported.`)
+- [x] Merchant onboarding now uses shared top-right toast notifications for validation/system messages instead of inline banners
+- [x] Required onboarding fields now render red validation states across profile, business, location, and verification steps
+- [x] Merchant onboarding phone sync refactored to handler-driven updates to prevent update-depth recursion during local syncing
+- [x] Location-step validation now trims required text fields and accepts valid numeric coordinates without strict range blocking
+- [x] Local development cleanup completed: hard deletion of `shekaigarcia@gmail.com` merchant account and related onboarding records
 - [~] Running Docker backend seed command still appears to use an older source variant that omits merchant onboarding catalog seeding; source parity follow-up remains
 - [~] Web dashboards implemented but integration still incomplete
 - [ ] Mobile app implementation started
