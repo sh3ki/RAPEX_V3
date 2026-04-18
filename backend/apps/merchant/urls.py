@@ -9,6 +9,7 @@ urlpatterns = [
     path('stores/<uuid:pk>/close/', views.StoreCloseView.as_view(), name='merchant-store-close'),
     path('onboarding/state/', views.MerchantOnboardingStateView.as_view(), name='merchant-onboarding-state'),
     path('onboarding/categories/', views.MerchantOnboardingCategoriesView.as_view(), name='merchant-onboarding-categories'),
+    path('onboarding/country-codes/', views.MerchantOnboardingCountryCodesView.as_view(), name='merchant-onboarding-country-codes'),
     path('onboarding/business-types/', views.MerchantOnboardingBusinessTypesView.as_view(), name='merchant-onboarding-business-types'),
     path('onboarding/step/profile/', views.MerchantOnboardingProfileStepView.as_view(), name='merchant-onboarding-step-profile'),
     path('onboarding/step/business/', views.MerchantOnboardingBusinessStepView.as_view(), name='merchant-onboarding-step-business'),
