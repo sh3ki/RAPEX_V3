@@ -4,6 +4,7 @@ from .models import (
     MerchantStore,
     StoreSchedule,
     MerchantMarkupOverride,
+    MerchantCountryCode,
     MerchantBusinessCategory,
     MerchantBusinessType,
     MerchantBusinessProfile,
@@ -85,6 +86,12 @@ class MerchantBusinessTypeSerializer(serializers.ModelSerializer):
     class Meta:
         model = MerchantBusinessType
         fields = ['id', 'name', 'category_id', 'category_name']
+
+
+class MerchantCountryCodeSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = MerchantCountryCode
+        fields = ['id', 'country_name', 'country_code', 'country_flag_emoji', 'max_digits', 'is_default']
 
 
 class MerchantOnboardingProfileStepSerializer(serializers.Serializer):
