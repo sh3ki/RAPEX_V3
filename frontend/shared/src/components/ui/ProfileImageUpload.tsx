@@ -102,8 +102,8 @@ export function ProfileImageUpload({
         </div>
 
         <div className="flex-1">
-          <p className="text-[1.35rem] font-semibold leading-6 text-slate-800">Drag and drop image</p>
-          <p className="mt-1 text-sm text-slate-500">or click to select</p>
+          <p className="text-sm font-semibold text-slate-800">Drop images here or click to browse.</p>
+          <p className="mt-1 text-xs text-slate-500">PNG, JPEG, and WEBP are supported.</p>
         </div>
 
         <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-300 bg-white text-slate-500 shadow-sm">
