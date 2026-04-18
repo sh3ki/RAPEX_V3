@@ -100,6 +100,103 @@ class AdminUserKYCRejectView(APIView):
         return Response({'status': 'rejected'})
 
 
+def _required_merchant_document_types(registration_type: str):
+    required = {'SELFIE_WITH_ID', 'VALID_ID'}
+    if registration_type == 'REGISTERED_NON_VAT':
+        required.update({'BARANGAY_PERMIT', 'DTI_OR_SEC'})
+    elif registration_type == 'REGISTERED_VAT':
+        required.update({'BIR_2303', 'DTI_OR_SEC', 'MAYORS_PERMIT'})
+    return required
+
+
+def _merchant_onboarding_progress(merchant_profile):
+    from apps.merchant.models import (
+        MerchantBusinessProfile,
+        MerchantDocument,
+        MerchantLocation,
+        MerchantOnboardingState,
+    )
+
+    user = merchant_profile.user
+    profile_completed = bool(
+        user.first_name and user.last_name and user.username and user.phone and user.email
+    )
+
+    business_profile = None
+    location = None
+    state = None
+    try:
+        business_profile = merchant_profile.business_profile
+    except MerchantBusinessProfile.DoesNotExist:
+        business_profile = None
+
+    try:
+        location = merchant_profile.onboarding_location
+    except MerchantLocation.DoesNotExist:
+        location = None
+
+    try:
+        state = merchant_profile.onboarding_state
+    except MerchantOnboardingState.DoesNotExist:
+        state = None
+
+    business_completed = bool(
+        business_profile
+        and business_profile.business_name
+        and business_profile.categories.filter(is_deleted=False, is_active=True).exists()
+        and business_profile.business_types.filter(is_deleted=False, is_active=True).exists()
+    )
+
+    location_completed = bool(
+        location
+        and location.house_number
+        and location.street_name
+        and location.barangay
+        and location.city_municipality
+        and location.province
+        and location.zip_code
+        and location.latitude is not None
+        and location.longitude is not None
+    )
+
+    registration_type = getattr(business_profile, 'registration_type', 'UNREGISTERED')
+    required_doc_types = _required_merchant_document_types(registration_type)
+    submitted_doc_types = set(
+        MerchantDocument.objects.filter(merchant=merchant_profile, is_deleted=False)
+        .values_list('document_type', flat=True)
+    )
+    documents_completed = required_doc_types.issubset(submitted_doc_types)
+
+    verification_completed = bool(
+        state
+        and state.current_step >= 5
+        and state.is_submitted
+        and state.email_verified
+        and state.phone_verified
+        and state.terms_accepted
+        and state.privacy_accepted
+    )
+
+    checklist = [
+        {'key': 'profile', 'label': 'Profile', 'completed': profile_completed},
+        {'key': 'business', 'label': 'Business', 'completed': business_completed},
+        {'key': 'location', 'label': 'Location', 'completed': location_completed},
+        {'key': 'documents', 'label': 'Documents', 'completed': documents_completed},
+        {'key': 'verification', 'label': 'Verify & Submit', 'completed': verification_completed},
+    ]
+    completed_steps = sum(1 for item in checklist if item['completed'])
+    total_steps = len(checklist)
+    percentage = int((completed_steps / total_steps) * 100)
+
+    return {
+        'completed_steps': completed_steps,
+        'total_steps': total_steps,
+        'percentage': percentage,
+        'can_review': completed_steps == total_steps,
+        'checklist': checklist,
+    }
+
+
 # ═══════════════════════════════════════════════════════════════════
 # MERCHANT MANAGEMENT
 # ═══════════════════════════════════════════════════════════════════
@@ -108,7 +205,7 @@ class AdminMerchantListView(APIView):
 
     def get(self, request):
         from apps.accounts.models import MerchantProfile
-        merchants = MerchantProfile.objects.filter(is_deleted=False)
+        merchants = MerchantProfile.objects.filter(is_deleted=False).select_related('user')
         search = request.query_params.get('search')
         if search:
             merchants = merchants.filter(
@@ -117,7 +214,8 @@ class AdminMerchantListView(APIView):
         data = [{
             'id': str(m.user_id), 'business_name': m.business_name,
             'kyc_status': m.kyc_status, 'phone': m.user.phone,
-        } for m in merchants.select_related('user')[:50]]
+            'onboarding_progress': _merchant_onboarding_progress(m),
+        } for m in merchants[:50]]
         return Response(data)
 
 
@@ -127,6 +225,15 @@ class AdminMerchantKYCApproveView(APIView):
     def patch(self, request, pk):
         from apps.accounts.models import MerchantProfile
         mp = MerchantProfile.objects.get(user_id=pk)
+        progress = _merchant_onboarding_progress(mp)
+        if not progress['can_review']:
+            return Response(
+                {
+                    'message': 'Merchant onboarding is incomplete. Approve is only allowed after all 5 steps are completed.',
+                    'onboarding_progress': progress,
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         mp.kyc_status = 'APPROVED'
         mp.save(update_fields=['kyc_status', 'updated_at'])
         from apps.notifications.services import NotificationService
@@ -141,6 +248,15 @@ class AdminMerchantKYCRejectView(APIView):
     def patch(self, request, pk):
         from apps.accounts.models import MerchantProfile
         mp = MerchantProfile.objects.get(user_id=pk)
+        progress = _merchant_onboarding_progress(mp)
+        if not progress['can_review']:
+            return Response(
+                {
+                    'message': 'Merchant onboarding is incomplete. Reject is only allowed after all 5 steps are completed.',
+                    'onboarding_progress': progress,
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         mp.kyc_status = 'REJECTED'
         mp.save(update_fields=['kyc_status', 'updated_at'])
         from apps.notifications.services import NotificationService
