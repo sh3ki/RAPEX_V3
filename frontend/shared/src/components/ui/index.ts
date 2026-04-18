@@ -26,4 +26,5 @@ export * from './Spinner';
 export * from './StatsCard';
 export * from './StatusBadge';
 export * from './TimePicker';
+export * from './Toast';
 export * from './Wizard';
