@@ -1,6 +1,6 @@
 'use client';
 
-import { BriefcaseBusiness, Camera, CheckCircle2, FileText, Loader2, MapPin, ShieldCheck, UserRound } from 'lucide-react';
+import { BriefcaseBusiness, Camera, CheckCircle2, FileText, Loader2, LogOut, MapPin, ShieldCheck, UserRound } from 'lucide-react';
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import api from '@/lib/api';
@@ -17,6 +17,7 @@ import {
   PasswordInput,
   PhoneNumberInput,
   ProfileImageUpload,
+  useToast,
   Wizard,
 } from '@shared/components/ui';
 
@@ -88,6 +89,14 @@ interface OnboardingState {
   };
 }
 
+interface OnboardingFieldErrors {
+  profile: Partial<Record<'first_name' | 'last_name' | 'email' | 'username' | 'phone_number' | 'password' | 'confirm_password', string>>;
+  business: Partial<Record<'business_name' | 'category_ids' | 'business_type_ids' | 'registration_type', string>>;
+  location: Partial<Record<'house_number' | 'street_name' | 'barangay' | 'city_municipality' | 'province' | 'zip_code' | 'latitude' | 'longitude', string>>;
+  documents: Partial<Record<'selfie_with_id', string>>;
+  verification: Partial<Record<'email_otp' | 'phone_otp' | 'terms_accepted' | 'privacy_accepted', string>>;
+}
+
 declare global {
   interface Window {
     FaceDetector?: any;
@@ -152,6 +161,14 @@ const initialState: OnboardingState = {
   },
 };
 
+const emptyFieldErrors: OnboardingFieldErrors = {
+  profile: {},
+  business: {},
+  location: {},
+  documents: {},
+  verification: {},
+};
+
 const steps = [
   { id: 'profile', title: 'Profile', icon: <UserRound size={15} /> },
   { id: 'business', title: 'Business', icon: <BriefcaseBusiness size={15} /> },
@@ -213,6 +230,35 @@ function profileInitials(firstName: string, lastName: string) {
   const last = lastName.trim().charAt(0);
   const joined = `${first}${last}`.trim();
   return joined ? joined.toUpperCase() : 'M';
+}
+
+function countryShortCode(countryName: string, countryFlagEmoji: string) {
+  const flagValue = asSafeString(countryFlagEmoji).trim().toUpperCase();
+  if (/^[A-Z]{2}$/.test(flagValue)) {
+    return flagValue;
+  }
+
+  const words = asSafeString(countryName).match(/[A-Za-z]+/g) || [];
+  if (words.length >= 2) {
+    const firstWord = words[0] || '';
+    const secondWord = words[1] || '';
+    return `${firstWord.charAt(0)}${secondWord.charAt(0)}`.toUpperCase();
+  }
+  if (words.length === 1) {
+    const firstWord = words[0] || '';
+    return firstWord.slice(0, 2).toUpperCase();
+  }
+  return 'NA';
+}
+
+function normalizeCoordinate(value: string | number): string {
+  const normalized = typeof value === 'number' ? value : Number(asSafeString(value).trim());
+  if (!Number.isFinite(normalized)) {
+    return '';
+  }
+
+  const fixed = normalized.toFixed(8);
+  return fixed.replace(/\.0+$/, '').replace(/(\.\d*?)0+$/, '$1');
 }
 
 async function dataUrlToFile(dataUrl: string, filename: string): Promise<File> {
@@ -356,6 +402,8 @@ export default function MerchantOnboardingPage() {
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
   const setUser = useAuthStore((s) => s.setUser);
+  const logout = useAuthStore((s) => s.logout);
+  const toast = useToast();
 
   const [currentStep, setCurrentStep] = useState(0);
   const [formState, setFormState] = useState<OnboardingState>(initialState);
@@ -363,8 +411,7 @@ export default function MerchantOnboardingPage() {
   const [businessTypes, setBusinessTypes] = useState<BusinessType[]>([]);
   const [countryCodes, setCountryCodes] = useState<CountryCodeOption[]>([DEFAULT_PHONE_COUNTRY]);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
-  const [info, setInfo] = useState('');
+  const [fieldErrors, setFieldErrors] = useState<OnboardingFieldErrors>(emptyFieldErrors);
   const [usernameAvailability, setUsernameAvailability] = useState<'unknown' | 'checking' | 'available' | 'taken'>('unknown');
   const [showMap, setShowMap] = useState(false);
   const [showTermsModal, setShowTermsModal] = useState(false);
@@ -381,6 +428,7 @@ export default function MerchantOnboardingPage() {
   const [phoneLocalNumber, setPhoneLocalNumber] = useState('');
   const [termsText, setTermsText] = useState('Loading terms...');
   const [privacyText, setPrivacyText] = useState('Loading privacy...');
+  const passwordSnapshotRef = useRef({ password: '', confirmPassword: '' });
 
   const stepDocuments = useMemo(() => documentMatrix[formState.business.registration_type], [formState.business.registration_type]);
   const isGoogleLinked = useMemo(() => hasHydrated && Boolean(user?.google_id), [hasHydrated, user]);
@@ -404,12 +452,20 @@ export default function MerchantOnboardingPage() {
         value: country.country_code,
         label: `${country.country_name} (${country.country_code})`,
         countryName: country.country_name,
-        flag: country.country_flag_emoji || '',
+        flag: country.country_flag_emoji || countryShortCode(country.country_name, country.country_flag_emoji),
+        shortCode: countryShortCode(country.country_name, country.country_flag_emoji),
         maxDigits: country.max_digits,
         isDefault: country.is_default,
       })),
     [countryCodes],
   );
+
+  const handleLogout = useCallback(() => {
+    if (typeof window !== 'undefined') {
+      window.sessionStorage.removeItem(STORAGE_KEY);
+    }
+    logout();
+  }, [logout]);
 
   const persistDraft = useCallback((nextState: OnboardingState) => {
     if (typeof window !== 'undefined') {
@@ -446,6 +502,43 @@ export default function MerchantOnboardingPage() {
       return merged;
     });
   }, [persistDraft]);
+
+  const clearStepFieldErrors = useCallback((stepKey: keyof OnboardingFieldErrors) => {
+    setFieldErrors((prev) => ({ ...prev, [stepKey]: {} }));
+  }, []);
+
+  const clearFieldError = useCallback(<K extends keyof OnboardingFieldErrors>(stepKey: K, fieldKey: keyof OnboardingFieldErrors[K]) => {
+    setFieldErrors((prev) => {
+      const stepErrors = prev[stepKey];
+      if (!stepErrors || !(fieldKey in stepErrors)) {
+        return prev;
+      }
+      const nextStepErrors = { ...stepErrors };
+      delete nextStepErrors[fieldKey];
+      return { ...prev, [stepKey]: nextStepErrors };
+    });
+  }, []);
+
+  const showErrorToast = useCallback(
+    (message: string, title = 'Validation Error') => {
+      toast.error(message, title);
+    },
+    [toast],
+  );
+
+  const showSuccessToast = useCallback(
+    (message: string, title = 'Success') => {
+      toast.success(message, title);
+    },
+    [toast],
+  );
+
+  useEffect(() => {
+    passwordSnapshotRef.current = {
+      password: formState.profile.password,
+      confirmPassword: formState.profile.confirm_password,
+    };
+  }, [formState.profile.confirm_password, formState.profile.password]);
 
   useEffect(() => {
     setHasHydrated(true);
@@ -550,12 +643,12 @@ export default function MerchantOnboardingPage() {
           router.replace('/pending');
         }
       } catch {
-        setError('Failed to load onboarding state.');
+        showErrorToast('Failed to load onboarding state.', 'Load Failed');
       }
     };
 
     void bootstrap();
-  }, [patchState, router, user]);
+  }, [patchState, router, showErrorToast, user]);
 
   useEffect(() => {
     const loadLookups = async () => {
@@ -630,27 +723,37 @@ export default function MerchantOnboardingPage() {
     return () => window.clearTimeout(timer);
   }, [formState.profile.username]);
 
+  const normalizeLocalPhone = useCallback(
+    (value: string, countryCode: string) => {
+      const maxDigits = getPhoneMaxDigits(countryCode, countryCodes);
+      return value.replace(/[^0-9]/g, '').slice(0, maxDigits);
+    },
+    [countryCodes],
+  );
+
+  const updatePhoneValue = useCallback(
+    (countryCode: string, localNumber: string) => {
+      const normalizedLocal = normalizeLocalPhone(localNumber, countryCode);
+      setPhoneCountryCode((prev) => (prev === countryCode ? prev : countryCode));
+      setPhoneLocalNumber((prev) => (prev === normalizedLocal ? prev : normalizedLocal));
+      const normalizedPhone = normalizedLocal ? `${countryCode}${normalizedLocal}` : '';
+      patchNested('profile', { phone_number: normalizedPhone });
+      clearFieldError('profile', 'phone_number');
+    },
+    [clearFieldError, normalizeLocalPhone, patchNested],
+  );
+
   useEffect(() => {
     const parsed = splitPhoneNumber(formState.profile.phone_number, countryCodes);
+    const normalizedLocal = normalizeLocalPhone(parsed.localNumber, parsed.countryCode);
     setPhoneCountryCode((prev) => (prev === parsed.countryCode ? prev : parsed.countryCode));
-    setPhoneLocalNumber((prev) => (prev === parsed.localNumber ? prev : parsed.localNumber));
-  }, [countryCodes, formState.profile.phone_number]);
+    setPhoneLocalNumber((prev) => (prev === normalizedLocal ? prev : normalizedLocal));
 
-  useEffect(() => {
-    const maxDigits = getPhoneMaxDigits(phoneCountryCode, countryCodes);
-    setPhoneLocalNumber((prev) => {
-      const trimmed = prev.slice(0, maxDigits);
-      return trimmed === prev ? prev : trimmed;
-    });
-  }, [countryCodes, phoneCountryCode]);
-
-  useEffect(() => {
-    const normalizedPhone = phoneLocalNumber ? `${phoneCountryCode}${phoneLocalNumber}` : '';
-    if (formState.profile.phone_number === normalizedPhone) {
-      return;
+    const normalizedPhone = normalizedLocal ? `${parsed.countryCode}${normalizedLocal}` : '';
+    if (formState.profile.phone_number !== normalizedPhone) {
+      patchNested('profile', { phone_number: normalizedPhone });
     }
-    patchNested('profile', { phone_number: normalizedPhone });
-  }, [formState.profile.phone_number, patchNested, phoneCountryCode, phoneLocalNumber]);
+  }, [countryCodes, formState.profile.phone_number, normalizeLocalPhone, patchNested]);
 
   useEffect(() => {
     const fetchLegal = async () => {
@@ -700,7 +803,6 @@ export default function MerchantOnboardingPage() {
   const uploadDocument = useCallback(
     async (documentType: string, file: File, isOptional: boolean) => {
       markDocumentUpload(documentType, true);
-      setError('');
       try {
         const formData = new FormData();
         formData.append('document_type', documentType);
@@ -720,12 +822,12 @@ export default function MerchantOnboardingPage() {
           patchNested('documents', { selfie_with_id: uploadedUrl });
         }
       } catch (err: any) {
-        setError(err?.response?.data?.message || 'Unable to upload document.');
+        showErrorToast(err?.response?.data?.message || 'Unable to upload document.', 'Upload Failed');
       } finally {
         markDocumentUpload(documentType, false);
       }
     },
-    [markDocumentUpload, patchNested, upsertDocument],
+    [markDocumentUpload, patchNested, showErrorToast, upsertDocument],
   );
 
   const uploadProfileImage = useCallback(
@@ -735,7 +837,6 @@ export default function MerchantOnboardingPage() {
       }
 
       setProfileImageUploading(true);
-      setError('');
       try {
         const formData = new FormData();
         formData.append('file', profileImageFile);
@@ -756,95 +857,184 @@ export default function MerchantOnboardingPage() {
         patchNested('profile', { profile_image_url: storagePath });
         return storagePath;
       } catch (err: any) {
-        setError(err?.response?.data?.message || 'Unable to upload profile image.');
+        showErrorToast(err?.response?.data?.message || 'Unable to upload profile image.', 'Upload Failed');
         throw err;
       } finally {
         setProfileImageUploading(false);
       }
     },
-    [patchNested, profileImageFile],
+    [patchNested, profileImageFile, showErrorToast],
   );
 
-  const validateCurrentStep = (): string | null => {
+  const validateCurrentStep = (): { message: string | null; errors: OnboardingFieldErrors } => {
+    const nextErrors: OnboardingFieldErrors = {
+      profile: {},
+      business: {},
+      location: {},
+      documents: {},
+      verification: {},
+    };
+
     if (profileImageUploading) {
-      return 'Please wait for profile image upload to finish.';
+      return { message: 'Please wait for profile image upload to finish.', errors: nextErrors };
     }
 
     if (uploadingDocTypes.length > 0) {
-      return 'Please wait for document uploads to finish.';
+      return { message: 'Please wait for document uploads to finish.', errors: nextErrors };
     }
 
     if (currentStep === 0) {
       const p = formState.profile;
-      if (!p.first_name || !p.last_name || !p.email || !p.username || !p.phone_number) {
-        return 'Please complete all required profile fields.';
+
+      if (!asSafeString(p.first_name).trim()) {
+        nextErrors.profile.first_name = 'First name is required.';
       }
-      if (!p.password || !p.confirm_password) {
-        return 'Password and confirm password are required.';
+      if (!asSafeString(p.last_name).trim()) {
+        nextErrors.profile.last_name = 'Last name is required.';
       }
-      if (!isStrongPassword(p.password)) {
-        return 'Password must be at least 8 characters and include uppercase, lowercase, number, and special character.';
+      if (!asSafeString(p.email).trim()) {
+        nextErrors.profile.email = 'Email is required.';
       }
-      if (p.password !== p.confirm_password) {
-        return 'Password and confirm password do not match.';
+      if (!asSafeString(p.username).trim()) {
+        nextErrors.profile.username = 'Username is required.';
+      }
+      if (!asSafeString(p.phone_number).trim()) {
+        nextErrors.profile.phone_number = 'Phone number is required.';
+      }
+      if (!asSafeString(p.password).trim()) {
+        nextErrors.profile.password = 'Password is required.';
+      }
+      if (!asSafeString(p.confirm_password).trim()) {
+        nextErrors.profile.confirm_password = 'Confirm password is required.';
+      }
+      if (p.password && !isStrongPassword(p.password)) {
+        nextErrors.profile.password = 'Use 8+ chars with uppercase, lowercase, number, and special character.';
+      }
+      if (p.password && p.confirm_password && p.password !== p.confirm_password) {
+        nextErrors.profile.confirm_password = 'Passwords do not match.';
       }
       if (usernameAvailability === 'taken') {
-        return 'Username is already taken.';
+        nextErrors.profile.username = 'This username is already in use.';
+      }
+
+      if (Object.keys(nextErrors.profile).length > 0) {
+        const passwordIssue = Boolean(nextErrors.profile.password || nextErrors.profile.confirm_password);
+        return {
+          message: passwordIssue ? 'Please correct password requirements before continuing.' : 'Please complete all required profile fields.',
+          errors: nextErrors,
+        };
       }
     }
 
     if (currentStep === 1) {
       const b = formState.business;
-      if (!b.business_name || !b.category_ids.length || !b.business_type_ids.length) {
-        return 'Please complete all required business fields.';
+
+      if (!asSafeString(b.business_name).trim()) {
+        nextErrors.business.business_name = 'Business name is required.';
+      }
+      if (!b.category_ids.length) {
+        nextErrors.business.category_ids = 'Select at least one business category.';
+      }
+      if (!b.business_type_ids.length) {
+        nextErrors.business.business_type_ids = 'Select at least one business type.';
+      }
+
+      if (Object.keys(nextErrors.business).length > 0) {
+        return { message: 'Please complete all required business fields.', errors: nextErrors };
       }
     }
 
     if (currentStep === 2) {
       const l = formState.location;
+      const hasValue = (value: string) => asSafeString(value).trim().length > 0;
+      const latitude = Number(l.latitude);
+      const longitude = Number(l.longitude);
+
       if (
-        !l.house_number ||
-        !l.street_name ||
-        !l.barangay ||
-        !l.city_municipality ||
-        !l.province ||
-        !l.zip_code ||
-        !l.latitude ||
-        !l.longitude
+        !hasValue(l.house_number) ||
+        !hasValue(l.street_name) ||
+        !hasValue(l.barangay) ||
+        !hasValue(l.city_municipality) ||
+        !hasValue(l.province) ||
+        !hasValue(l.zip_code) ||
+        !hasValue(l.latitude) ||
+        !hasValue(l.longitude)
       ) {
-        return 'Please complete business location and map coordinates.';
+        if (!hasValue(l.house_number)) {
+          nextErrors.location.house_number = 'House number is required.';
+        }
+        if (!hasValue(l.street_name)) {
+          nextErrors.location.street_name = 'Street name is required.';
+        }
+        if (!hasValue(l.barangay)) {
+          nextErrors.location.barangay = 'Barangay is required.';
+        }
+        if (!hasValue(l.city_municipality)) {
+          nextErrors.location.city_municipality = 'City / Municipality is required.';
+        }
+        if (!hasValue(l.province)) {
+          nextErrors.location.province = 'Province is required.';
+        }
+        if (!hasValue(l.zip_code)) {
+          nextErrors.location.zip_code = 'Zip code is required.';
+        }
+        if (!hasValue(l.latitude)) {
+          nextErrors.location.latitude = 'Latitude is required.';
+        }
+        if (!hasValue(l.longitude)) {
+          nextErrors.location.longitude = 'Longitude is required.';
+        }
+        return { message: 'Please complete business location and map coordinates.', errors: nextErrors };
+      }
+
+      if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+        nextErrors.location.latitude = 'Latitude must be a valid numeric value.';
+        nextErrors.location.longitude = 'Longitude must be a valid numeric value.';
+        return { message: 'Please select a valid map location with numeric latitude and longitude.', errors: nextErrors };
       }
     }
 
     if (currentStep === 3) {
       if (!formState.documents.selfie_with_id) {
-        return 'Selfie with ID capture is required.';
+        nextErrors.documents.selfie_with_id = 'Selfie with ID is required.';
+        return { message: 'Selfie with ID capture is required.', errors: nextErrors };
       }
       const selfieCapturedThisSession = formState.documents.selfie_with_id.startsWith('data:image/');
       if (selfieCapturedThisSession && !selfieFaceValid && typeof window !== 'undefined' && !!window.FaceDetector) {
-        return 'Face must be clearly detected before selfie capture.';
+        return { message: 'Face must be clearly detected before selfie capture.', errors: nextErrors };
       }
 
       const required = stepDocuments.filter((item) => item.required).map((item) => item.type);
       const submitted = new Set(formState.documents.items.map((item) => item.document_type));
       for (const docType of required) {
         if (!submitted.has(docType)) {
-          return `Required document missing: ${docType}`;
+          return { message: `Required document missing: ${docType}`, errors: nextErrors };
         }
       }
     }
 
     if (currentStep === 4) {
       const v = formState.verification;
-      if (!v.email_otp || !v.phone_otp) {
-        return 'Email OTP and phone OTP are required.';
+
+      if (!asSafeString(v.email_otp).trim()) {
+        nextErrors.verification.email_otp = 'Email OTP is required.';
       }
-      if (!v.terms_accepted || !v.privacy_accepted) {
-        return 'You must accept Terms and Privacy Policy to submit.';
+      if (!asSafeString(v.phone_otp).trim()) {
+        nextErrors.verification.phone_otp = 'Phone OTP is required.';
+      }
+      if (!v.terms_accepted) {
+        nextErrors.verification.terms_accepted = 'You must accept Terms and Conditions.';
+      }
+      if (!v.privacy_accepted) {
+        nextErrors.verification.privacy_accepted = 'You must accept the Privacy Policy.';
+      }
+
+      if (Object.keys(nextErrors.verification).length > 0) {
+        return { message: 'Please complete OTP and policy acceptance requirements.', errors: nextErrors };
       }
     }
 
-    return null;
+    return { message: null, errors: nextErrors };
   };
 
   const saveCurrentStep = async () => {
@@ -860,11 +1050,25 @@ export default function MerchantOnboardingPage() {
       await api.post('/merchant/onboarding/step/business/', formState.business);
     }
     if (currentStep === 2) {
+      const normalizedLatitude = normalizeCoordinate(formState.location.latitude);
+      const normalizedLongitude = normalizeCoordinate(formState.location.longitude);
+
+      if (!normalizedLatitude || !normalizedLongitude) {
+        throw new Error('Location coordinates must be valid numeric values.');
+      }
+
       await api.post('/merchant/onboarding/step/location/', {
         ...formState.location,
-        latitude: Number(formState.location.latitude),
-        longitude: Number(formState.location.longitude),
+        latitude: normalizedLatitude,
+        longitude: normalizedLongitude,
       });
+
+      if (formState.location.latitude !== normalizedLatitude || formState.location.longitude !== normalizedLongitude) {
+        patchNested('location', {
+          latitude: normalizedLatitude,
+          longitude: normalizedLongitude,
+        });
+      }
     }
     if (currentStep === 3) {
       await api.post('/merchant/onboarding/step/documents/', {
@@ -874,33 +1078,67 @@ export default function MerchantOnboardingPage() {
   };
 
   const onNext = async () => {
-    const validationError = validateCurrentStep();
-    if (validationError) {
-      setError(validationError);
+    const validationResult = validateCurrentStep();
+    setFieldErrors(validationResult.errors);
+    if (validationResult.message) {
+      showErrorToast(validationResult.message);
       return;
     }
 
     setSaving(true);
-    setError('');
     try {
       await saveCurrentStep();
+      clearStepFieldErrors(
+        currentStep === 0
+          ? 'profile'
+          : currentStep === 1
+          ? 'business'
+          : currentStep === 2
+          ? 'location'
+          : currentStep === 3
+          ? 'documents'
+          : 'verification',
+      );
       setCurrentStep((prev) => Math.min(prev + 1, 4));
     } catch (err: any) {
-      setError(err?.response?.data?.message || 'Unable to save this step.');
+      showErrorToast(err?.response?.data?.message || 'Unable to save this step.', 'Save Failed');
     } finally {
       setSaving(false);
     }
   };
 
   const onPrevious = () => {
-    setError('');
-    setCurrentStep((prev) => Math.max(prev - 1, 0));
+    const targetStep = Math.max(currentStep - 1, 0);
+
+    if (targetStep === 0) {
+      const snapshot = passwordSnapshotRef.current;
+      if (snapshot.password || snapshot.confirmPassword) {
+        patchNested('profile', {
+          password: snapshot.password,
+          confirm_password: snapshot.confirmPassword,
+        });
+      }
+    }
+
+    clearStepFieldErrors(
+      currentStep === 0
+        ? 'profile'
+        : currentStep === 1
+        ? 'business'
+        : currentStep === 2
+        ? 'location'
+        : currentStep === 3
+        ? 'documents'
+        : 'verification',
+    );
+      setCurrentStep(targetStep);
   };
 
   const onSubmit = async () => {
-    const validationError = validateCurrentStep();
-    if (validationError) {
-      setError(validationError);
+    const validationResult = validateCurrentStep();
+    setFieldErrors(validationResult.errors);
+    if (validationResult.message) {
+      showErrorToast(validationResult.message);
       return;
     }
     setShowSubmitConfirm(true);
@@ -908,8 +1146,6 @@ export default function MerchantOnboardingPage() {
 
   const confirmSubmit = async () => {
     setSaving(true);
-    setError('');
-    setInfo('');
     try {
       await api.post('/merchant/onboarding/submit/', {
         email_otp: formState.verification.email_otp,
@@ -930,9 +1166,10 @@ export default function MerchantOnboardingPage() {
       if (typeof window !== 'undefined') {
         window.sessionStorage.removeItem(STORAGE_KEY);
       }
+      showSuccessToast('Your onboarding application has been submitted and is now pending review.', 'Submitted');
       router.push('/pending');
     } catch (err: any) {
-      setError(err?.response?.data?.message || 'Submission failed. Please retry.');
+      showErrorToast(err?.response?.data?.message || 'Submission failed. Please retry.', 'Submission Failed');
     } finally {
       setSaving(false);
       setShowSubmitConfirm(false);
@@ -941,22 +1178,22 @@ export default function MerchantOnboardingPage() {
 
   const requestVerificationOtp = async () => {
     if (uploadingDocTypes.length > 0) {
-      setError('Please wait for document uploads to finish before requesting OTP.');
+      showErrorToast('Please wait for document uploads to finish before requesting OTP.');
       return;
     }
 
     try {
       await saveCurrentStep();
       await api.post('/merchant/onboarding/send-otp/');
-      setInfo('Verification OTP sent to your email and phone.');
-      setError('');
+      showSuccessToast('Verification OTP sent to your email and phone.', 'OTP Sent');
     } catch (err: any) {
-      setError(err?.response?.data?.message || 'Unable to send OTP.');
+      showErrorToast(err?.response?.data?.message || 'Unable to send OTP.', 'OTP Failed');
     }
   };
 
   const renderProfileStep = () => {
     const initials = profileInitials(formState.profile.first_name, formState.profile.last_name);
+    const usernameError = usernameAvailability === 'taken' ? 'This username is already in use.' : fieldErrors.profile.username;
 
     return (
       <div className="grid gap-4 md:grid-cols-2">
@@ -977,11 +1214,10 @@ export default function MerchantOnboardingPage() {
 
               const maxSize = 5 * 1024 * 1024;
               if (file.size > maxSize) {
-                setError('Profile image exceeds 5MB size limit.');
+                showErrorToast('Profile image exceeds 5MB size limit.', 'Upload Failed');
                 return;
               }
 
-              setError('');
               setProfileImageFile(file);
             }}
           />
@@ -991,16 +1227,19 @@ export default function MerchantOnboardingPage() {
               <Loader2 size={12} className="animate-spin" />
               Uploading profile image...
             </p>
-          ) : profileImageFile ? (
-            <p className="mt-2 text-xs font-medium text-primary-700">Image preview is ready. File will be saved when you click Next.</p>
           ) : null}
+          <p className="mt-2 text-xs text-slate-500">Drop images here or click to browse. PNG, JPEG, and WEBP are supported.</p>
         </div>
 
         <Input
           label="First name *"
           placeholder="Enter your first name"
           value={formState.profile.first_name}
-          onChange={(e) => patchNested('profile', { first_name: e.target.value })}
+          onChange={(e) => {
+            patchNested('profile', { first_name: e.target.value });
+            clearFieldError('profile', 'first_name');
+          }}
+          error={fieldErrors.profile.first_name}
         />
 
         <Input
@@ -1014,7 +1253,11 @@ export default function MerchantOnboardingPage() {
           label="Last name *"
           placeholder="Enter your last name"
           value={formState.profile.last_name}
-          onChange={(e) => patchNested('profile', { last_name: e.target.value })}
+          onChange={(e) => {
+            patchNested('profile', { last_name: e.target.value });
+            clearFieldError('profile', 'last_name');
+          }}
+          error={fieldErrors.profile.last_name}
         />
 
         <Input
@@ -1022,8 +1265,12 @@ export default function MerchantOnboardingPage() {
           placeholder="Enter your email address"
           value={formState.profile.email}
           readOnly={isGoogleLinked}
-          onChange={(e) => patchNested('profile', { email: e.target.value })}
+          onChange={(e) => {
+            patchNested('profile', { email: e.target.value });
+            clearFieldError('profile', 'email');
+          }}
           hint={isGoogleLinked ? 'Read-only for Google-linked account.' : undefined}
+          error={fieldErrors.profile.email}
           className={isGoogleLinked ? 'bg-slate-100' : ''}
         />
 
@@ -1031,7 +1278,10 @@ export default function MerchantOnboardingPage() {
           label="Username *"
           placeholder="Choose a unique username"
           value={asSafeString(formState.profile.username)}
-          onChange={(e) => patchNested('profile', { username: e.target.value })}
+          onChange={(e) => {
+            patchNested('profile', { username: e.target.value });
+            clearFieldError('profile', 'username');
+          }}
           hint={
             usernameAvailability === 'checking'
               ? 'Checking username...'
@@ -1041,7 +1291,7 @@ export default function MerchantOnboardingPage() {
               ? 'Username is already taken'
               : 'Enter a username to check availability'
           }
-          error={usernameAvailability === 'taken' ? 'This username is already in use.' : undefined}
+          error={usernameError}
         />
 
         <PhoneNumberInput
@@ -1049,21 +1299,30 @@ export default function MerchantOnboardingPage() {
           countryCode={phoneCountryCode}
           phone={phoneLocalNumber}
           countries={countryCodeOptions}
-          onCountryCodeChange={(value) => setPhoneCountryCode(value)}
-          onPhoneChange={(value) => setPhoneLocalNumber(value)}
+          onCountryCodeChange={(value) => updatePhoneValue(value, phoneLocalNumber)}
+          onPhoneChange={(value) => updatePhoneValue(phoneCountryCode, value)}
           placeholder="Enter your mobile number"
+          error={fieldErrors.profile.phone_number}
         />
 
         <div className="md:col-span-2 grid gap-4 md:grid-cols-2">
           <PasswordInput
             value={formState.profile.password}
-            onChange={(value) => patchNested('profile', { password: value })}
+            onChange={(value) => {
+              patchNested('profile', { password: value });
+              clearFieldError('profile', 'password');
+            }}
             hint={passwordStrong ? 'Password meets all complexity requirements.' : undefined}
+            error={fieldErrors.profile.password}
           />
           <ConfirmPasswordInput
             password={formState.profile.password}
             confirmPassword={formState.profile.confirm_password}
-            onChange={(value) => patchNested('profile', { confirm_password: value })}
+            onChange={(value) => {
+              patchNested('profile', { confirm_password: value });
+              clearFieldError('profile', 'confirm_password');
+            }}
+            error={fieldErrors.profile.confirm_password}
           />
         </div>
       </div>
@@ -1077,28 +1336,41 @@ export default function MerchantOnboardingPage() {
           label="Business name *"
           placeholder="Enter your registered or trade business name"
           value={formState.business.business_name}
-          onChange={(e) => patchNested('business', { business_name: e.target.value })}
+          onChange={(e) => {
+            patchNested('business', { business_name: e.target.value });
+            clearFieldError('business', 'business_name');
+          }}
+          error={fieldErrors.business.business_name}
         />
 
         <MultiSelectDropdown
           label="Business category *"
           value={formState.business.category_ids}
           options={categoryOptions}
-          onChange={(value) => patchNested('business', { category_ids: value, business_type_ids: [] })}
+          onChange={(value) => {
+            patchNested('business', { category_ids: value, business_type_ids: [] });
+            clearFieldError('business', 'category_ids');
+            clearFieldError('business', 'business_type_ids');
+          }}
           placeholder="Select one or more categories"
+          error={fieldErrors.business.category_ids}
         />
 
         <MultiSelectDropdown
           label="Business type *"
           value={formState.business.business_type_ids}
           options={businessTypeOptions}
-          onChange={(value) => patchNested('business', { business_type_ids: value })}
+          onChange={(value) => {
+            patchNested('business', { business_type_ids: value });
+            clearFieldError('business', 'business_type_ids');
+          }}
           placeholder={
             formState.business.category_ids.length
               ? 'Select one or more business types'
               : 'Select categories first'
           }
           disabled={!formState.business.category_ids.length}
+          error={fieldErrors.business.business_type_ids}
         />
 
         <Dropdown
@@ -1109,7 +1381,11 @@ export default function MerchantOnboardingPage() {
             { value: 'REGISTERED_NON_VAT', label: 'Registered (Non-VAT)' },
             { value: 'REGISTERED_VAT', label: 'Registered (VAT Included)' },
           ]}
-          onChange={(value) => patchNested('business', { registration_type: value as RegistrationType })}
+          onChange={(value) => {
+            patchNested('business', { registration_type: value as RegistrationType });
+            clearFieldError('business', 'registration_type');
+          }}
+          error={fieldErrors.business.registration_type}
         />
       </div>
     );
@@ -1121,41 +1397,65 @@ export default function MerchantOnboardingPage() {
         label="House number *"
         placeholder="House number, block, or lot"
         value={formState.location.house_number}
-        onChange={(e) => patchNested('location', { house_number: e.target.value })}
+        onChange={(e) => {
+          patchNested('location', { house_number: e.target.value });
+          clearFieldError('location', 'house_number');
+        }}
+        error={fieldErrors.location.house_number}
       />
       <Input
         label="Street name *"
         placeholder="Street, subdivision, or zone"
         value={formState.location.street_name}
-        onChange={(e) => patchNested('location', { street_name: e.target.value })}
+        onChange={(e) => {
+          patchNested('location', { street_name: e.target.value });
+          clearFieldError('location', 'street_name');
+        }}
+        error={fieldErrors.location.street_name}
       />
       <Input
         label="Barangay *"
         placeholder="Enter barangay"
         value={formState.location.barangay}
-        onChange={(e) => patchNested('location', { barangay: e.target.value })}
+        onChange={(e) => {
+          patchNested('location', { barangay: e.target.value });
+          clearFieldError('location', 'barangay');
+        }}
+        error={fieldErrors.location.barangay}
       />
       <Input
         label="City / Municipality *"
         placeholder="Enter city or municipality"
         value={formState.location.city_municipality}
-        onChange={(e) => patchNested('location', { city_municipality: e.target.value })}
+        onChange={(e) => {
+          patchNested('location', { city_municipality: e.target.value });
+          clearFieldError('location', 'city_municipality');
+        }}
+        error={fieldErrors.location.city_municipality}
       />
       <Input
         label="Province *"
         placeholder="Enter province"
         value={formState.location.province}
-        onChange={(e) => patchNested('location', { province: e.target.value })}
+        onChange={(e) => {
+          patchNested('location', { province: e.target.value });
+          clearFieldError('location', 'province');
+        }}
+        error={fieldErrors.location.province}
       />
       <Input
         label="Zip code *"
         placeholder="e.g., 4103"
         value={formState.location.zip_code}
-        onChange={(e) => patchNested('location', { zip_code: e.target.value })}
+        onChange={(e) => {
+          patchNested('location', { zip_code: e.target.value });
+          clearFieldError('location', 'zip_code');
+        }}
+        error={fieldErrors.location.zip_code}
       />
 
-      <Input label="Latitude *" value={formState.location.latitude} readOnly className="bg-slate-100" />
-      <Input label="Longitude *" value={formState.location.longitude} readOnly className="bg-slate-100" />
+      <Input label="Latitude *" value={formState.location.latitude} readOnly className="bg-slate-100" error={fieldErrors.location.latitude} />
+      <Input label="Longitude *" value={formState.location.longitude} readOnly className="bg-slate-100" error={fieldErrors.location.longitude} />
 
       <div className="md:col-span-2">
         <Button type="button" variant="secondary" onClick={() => setShowMap(true)}>
@@ -1167,23 +1467,25 @@ export default function MerchantOnboardingPage() {
 
   const renderDocumentsStep = () => (
     <div className="space-y-4">
-      <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div className={fieldErrors.documents.selfie_with_id ? 'rounded-xl border border-red-300 bg-red-50/40 p-4 shadow-sm' : 'rounded-xl border border-slate-200 bg-white p-4 shadow-sm'}>
         <h4 className="mb-2 font-semibold text-slate-900">Selfie with ID *</h4>
         <SelfieCapture
           value={formState.documents.selfie_with_id}
           onCapture={(dataUrl, detected) => {
             setSelfieFaceValid(detected);
             patchNested('documents', { selfie_with_id: dataUrl });
+            clearFieldError('documents', 'selfie_with_id');
             void (async () => {
               try {
                 const selfieFile = await dataUrlToFile(dataUrl, 'selfie-with-id.jpg');
                 await uploadDocument('SELFIE_WITH_ID', selfieFile, false);
               } catch {
-                setError('Failed to process selfie capture for upload.');
+                showErrorToast('Failed to process selfie capture for upload.', 'Upload Failed');
               }
             })();
           }}
         />
+        {fieldErrors.documents.selfie_with_id ? <p className="mt-2 text-xs font-medium text-red-600">{fieldErrors.documents.selfie_with_id}</p> : null}
         {uploadingDocTypes.includes('SELFIE_WITH_ID') ? (
           <p className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-primary-700">
             <Loader2 size={12} className="animate-spin" />
@@ -1215,7 +1517,7 @@ export default function MerchantOnboardingPage() {
 
                     const maxSize = 5 * 1024 * 1024;
                     if (file.size > maxSize) {
-                      setError(`${item.label} exceeds 5MB size limit.`);
+                      showErrorToast(`${item.label} exceeds 5MB size limit.`, 'Upload Failed');
                       return;
                     }
                     void uploadDocument(item.type, file, !item.required);
@@ -1259,22 +1561,34 @@ export default function MerchantOnboardingPage() {
           label="Email OTP *"
           placeholder="Enter the 6-digit email OTP"
           value={formState.verification.email_otp}
-          onChange={(e) => patchNested('verification', { email_otp: e.target.value })}
+          onChange={(e) => {
+            patchNested('verification', { email_otp: e.target.value });
+            clearFieldError('verification', 'email_otp');
+          }}
+          error={fieldErrors.verification.email_otp}
         />
         <Input
           label="Phone OTP *"
           placeholder="Enter the 6-digit SMS OTP"
           value={formState.verification.phone_otp}
-          onChange={(e) => patchNested('verification', { phone_otp: e.target.value })}
+          onChange={(e) => {
+            patchNested('verification', { phone_otp: e.target.value });
+            clearFieldError('verification', 'phone_otp');
+          }}
+          error={fieldErrors.verification.phone_otp}
         />
       </div>
 
       <div className="space-y-3">
         <Checkbox
           checked={formState.verification.terms_accepted}
-          onChange={(e) => patchNested('verification', { terms_accepted: e.target.checked })}
+          onChange={(e) => {
+            patchNested('verification', { terms_accepted: e.target.checked });
+            clearFieldError('verification', 'terms_accepted');
+          }}
           label="I agree to the Terms and Conditions"
           description="Acceptance is required before merchant onboarding submission."
+          error={fieldErrors.verification.terms_accepted}
         />
         <button type="button" className="text-sm font-medium text-primary-700 underline" onClick={() => setShowTermsModal(true)}>
           View Terms and Conditions
@@ -1282,9 +1596,13 @@ export default function MerchantOnboardingPage() {
 
         <Checkbox
           checked={formState.verification.privacy_accepted}
-          onChange={(e) => patchNested('verification', { privacy_accepted: e.target.checked })}
+          onChange={(e) => {
+            patchNested('verification', { privacy_accepted: e.target.checked });
+            clearFieldError('verification', 'privacy_accepted');
+          }}
           label="I agree to the Privacy Policy"
           description="You acknowledge data handling requirements for onboarding."
+          error={fieldErrors.verification.privacy_accepted}
         />
         <button type="button" className="text-sm font-medium text-primary-700 underline" onClick={() => setShowPrivacyModal(true)}>
           View Privacy Policy
@@ -1296,15 +1614,16 @@ export default function MerchantOnboardingPage() {
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top,_#f8fbff_0%,_#f3f6fb_50%,_#eef2f8_100%)] p-4 md:p-8">
       <div className="mx-auto w-full max-w-6xl">
-        <div className="mb-6">
-          <h1 className="text-3xl font-bold text-slate-900">Merchant Setup Wizard</h1>
-          <p className="mt-1 text-sm text-slate-600">Complete all 5 steps. Final data submission happens only at Step 5.</p>
+        <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-slate-900">Merchant Setup Wizard</h1>
+            <p className="mt-1 text-sm text-slate-600">Complete all 5 steps. Final data submission happens only at Step 5.</p>
+          </div>
+          <Button type="button" variant="secondary" onClick={handleLogout} className="self-start">
+            <LogOut size={16} />
+            Logout
+          </Button>
         </div>
-
-        {error ? <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700">{error}</div> : null}
-        {info ? (
-          <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm text-emerald-700">{info}</div>
-        ) : null}
 
         <Wizard
           steps={steps}
@@ -1333,7 +1652,12 @@ export default function MerchantOnboardingPage() {
         latitude={formState.location.latitude}
         longitude={formState.location.longitude}
         provider={MAP_PROVIDER === 'leaflet' ? 'leaflet' : 'manual'}
-        onSave={(lat, lng) => patchNested('location', { latitude: lat, longitude: lng })}
+        onSave={(lat, lng) =>
+          patchNested('location', {
+            latitude: normalizeCoordinate(lat),
+            longitude: normalizeCoordinate(lng),
+          })
+        }
       />
 
       {showTermsModal ? (
