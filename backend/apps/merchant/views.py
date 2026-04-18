@@ -16,6 +16,7 @@ from .serializers import (
     NearbyStoreSerializer,
     MerchantBusinessCategorySerializer,
     MerchantBusinessTypeSerializer,
+    MerchantCountryCodeSerializer,
     MerchantOnboardingProfileStepSerializer,
     MerchantOnboardingBusinessStepSerializer,
     MerchantOnboardingLocationStepSerializer,
@@ -29,7 +30,14 @@ from .serializers import (
     MerchantDocumentSerializer,
 )
 from .services import MerchantService
-from .models import MerchantBusinessCategory, MerchantBusinessType, MerchantBusinessProfile, MerchantLocation, MerchantDocument
+from .models import (
+    MerchantBusinessCategory,
+    MerchantBusinessType,
+    MerchantCountryCode,
+    MerchantBusinessProfile,
+    MerchantLocation,
+    MerchantDocument,
+)
 
 
 class MerchantStoreListView(generics.ListAPIView):
@@ -132,6 +140,14 @@ class MerchantOnboardingBusinessTypesView(generics.ListAPIView):
         if category_ids:
             queryset = queryset.filter(category_id__in=category_ids)
         return queryset
+
+
+class MerchantOnboardingCountryCodesView(generics.ListAPIView):
+    permission_classes = [IsAuthenticated, IsMerchant]
+    serializer_class = MerchantCountryCodeSerializer
+
+    def get_queryset(self):
+        return MerchantCountryCode.objects.filter(is_active=True, is_deleted=False)
 
 
 class MerchantOnboardingStateView(APIView):
