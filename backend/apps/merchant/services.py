@@ -154,15 +154,29 @@ class MerchantService:
         MerchantService._assert_onboarding_editable(state)
 
         user = merchant_profile.user
+        previous_email = (user.email or '').strip().lower()
+        previous_phone = (user.phone or '').strip()
         username = validated_data['username'].strip()
         phone_number = validated_data['phone_number'].strip()
-        password = validated_data['password']
-        confirm_password = validated_data['confirm_password']
+        password = (validated_data.get('password') or '').strip()
+        confirm_password = (validated_data.get('confirm_password') or '').strip()
         submitted_email = validated_data['email'].strip().lower()
 
-        if password != confirm_password:
-            raise RapexAPIException('Password and confirm password do not match.', code='password_mismatch', status_code=400)
-        MerchantService._validate_password_strength(password)
+        has_saved_password = user.has_usable_password()
+        update_password = bool(password or confirm_password)
+
+        if update_password:
+            if not password or not confirm_password:
+                raise RapexAPIException(
+                    'Password and confirm password are both required when updating password.',
+                    code='password_required',
+                    status_code=400,
+                )
+            if password != confirm_password:
+                raise RapexAPIException('Password and confirm password do not match.', code='password_mismatch', status_code=400)
+            MerchantService._validate_password_strength(password)
+        elif not has_saved_password:
+            raise RapexAPIException('Password is required for initial onboarding setup.', code='password_required', status_code=400)
 
         if CustomUser.objects.filter(username=username).exclude(pk=user.pk).exists():
             raise RapexAPIException('Username already exists.', code='username_exists', status_code=409)
@@ -184,8 +198,12 @@ class MerchantService:
         if image_url:
             user.avatar_url = image_url
             user.profile_image_url = image_url
-        user.set_password(password)
-        user.save(update_fields=['first_name', 'last_name', 'username', 'phone', 'email', 'password', 'avatar_url', 'profile_image_url'])
+        update_fields = ['first_name', 'last_name', 'username', 'phone', 'email', 'avatar_url', 'profile_image_url']
+        if update_password:
+            user.set_password(password)
+            update_fields.append('password')
+
+        user.save(update_fields=update_fields)
 
         middle_name = validated_data.get('middle_name', '').strip()
         merchant_profile.full_name = ' '.join(
@@ -205,7 +223,17 @@ class MerchantService:
             'phone_number': user.phone,
         }
         state.draft_payload = draft
-        state.save(update_fields=['current_step', 'draft_payload'])
+
+        state_update_fields = ['current_step', 'draft_payload']
+        if submitted_email != previous_email and state.email_verified:
+            state.email_verified = False
+            state_update_fields.append('email_verified')
+
+        if phone_number != previous_phone and state.phone_verified:
+            state.phone_verified = False
+            state_update_fields.append('phone_verified')
+
+        state.save(update_fields=state_update_fields)
         return state
 
     @staticmethod
@@ -301,23 +329,66 @@ class MerchantService:
         return state
 
     @staticmethod
-    def send_verification_otps(merchant_profile):
-        user = merchant_profile.user
-        if not user.email:
-            raise RapexAPIException('Email is required before verification.', code='email_required', status_code=400)
-        if not user.phone:
-            raise RapexAPIException('Phone number is required before verification.', code='phone_required', status_code=400)
+    def send_verification_otps(merchant_profile, channel: str = 'BOTH'):
+        normalized_channel = str(channel or 'BOTH').upper().strip()
+        if normalized_channel not in {'EMAIL', 'PHONE', 'BOTH'}:
+            raise RapexAPIException('Invalid OTP channel.', code='invalid_otp_channel', status_code=400)
 
-        email_result = OTPService.request_email_otp(user.email, OTPRecord.Purpose.EMAIL_VERIFICATION)
-        phone_result = OTPService.request_otp(user.phone, OTPRecord.Purpose.PHONE_VERIFICATION)
-        return {
-            'email': email_result,
-            'phone': phone_result,
-        }
+        user = merchant_profile.user
+        results = {}
+
+        if normalized_channel in {'EMAIL', 'BOTH'}:
+            if not user.email:
+                raise RapexAPIException('Email is required before verification.', code='email_required', status_code=400)
+            results['email'] = OTPService.request_email_otp(user.email, OTPRecord.Purpose.EMAIL_VERIFICATION)
+
+        if normalized_channel in {'PHONE', 'BOTH'}:
+            if not user.phone:
+                raise RapexAPIException('Phone number is required before verification.', code='phone_required', status_code=400)
+            results['phone'] = OTPService.request_otp(user.phone, OTPRecord.Purpose.PHONE_VERIFICATION)
+
+        return results
 
     @staticmethod
     @transaction.atomic
-    def submit_onboarding(merchant_profile, email_otp: str, phone_otp: str, terms_accepted: bool, privacy_accepted: bool):
+    def verify_verification_otp(merchant_profile, channel: str, otp_code: str):
+        state = MerchantService.get_or_create_onboarding_state(merchant_profile)
+        MerchantService._assert_onboarding_editable(state)
+
+        normalized_channel = str(channel or '').upper().strip()
+        normalized_code = str(otp_code or '').strip()
+        if normalized_channel not in {'EMAIL', 'PHONE'}:
+            raise RapexAPIException('Invalid OTP channel.', code='invalid_otp_channel', status_code=400)
+
+        if len(normalized_code) != 6 or not normalized_code.isdigit():
+            raise RapexAPIException('OTP code must be a 6-digit number.', code='invalid_otp', status_code=400)
+
+        user = merchant_profile.user
+        if normalized_channel == 'EMAIL':
+            if state.email_verified:
+                return state
+            if not user.email:
+                raise RapexAPIException('Email is required before verification.', code='email_required', status_code=400)
+            OTPService.verify_email_otp(user.email, normalized_code, OTPRecord.Purpose.EMAIL_VERIFICATION)
+            state.email_verified = True
+            state.current_step = max(state.current_step, 5)
+            state.save(update_fields=['email_verified', 'current_step'])
+            return state
+
+        if state.phone_verified:
+            return state
+        if not user.phone:
+            raise RapexAPIException('Phone number is required before verification.', code='phone_required', status_code=400)
+
+        OTPService.verify_otp(user.phone, normalized_code, OTPRecord.Purpose.PHONE_VERIFICATION)
+        state.phone_verified = True
+        state.current_step = max(state.current_step, 5)
+        state.save(update_fields=['phone_verified', 'current_step'])
+        return state
+
+    @staticmethod
+    @transaction.atomic
+    def submit_onboarding(merchant_profile, email_otp: str = '', phone_otp: str = '', terms_accepted: bool = False, privacy_accepted: bool = False):
         state = MerchantService.get_or_create_onboarding_state(merchant_profile)
         MerchantService._assert_onboarding_editable(state)
 
@@ -332,8 +403,20 @@ class MerchantService:
         if not user.email or not user.phone:
             raise RapexAPIException('Email and phone are required before submission.', code='contact_required', status_code=400)
 
-        OTPService.verify_email_otp(user.email, email_otp, OTPRecord.Purpose.EMAIL_VERIFICATION)
-        OTPService.verify_otp(user.phone, phone_otp, OTPRecord.Purpose.PHONE_VERIFICATION)
+        normalized_email_otp = str(email_otp or '').strip()
+        normalized_phone_otp = str(phone_otp or '').strip()
+
+        if not state.email_verified:
+            if len(normalized_email_otp) != 6 or not normalized_email_otp.isdigit():
+                raise RapexAPIException('Please verify your email OTP before submission.', code='email_not_verified', status_code=400)
+            OTPService.verify_email_otp(user.email, normalized_email_otp, OTPRecord.Purpose.EMAIL_VERIFICATION)
+            state.email_verified = True
+
+        if not state.phone_verified:
+            if len(normalized_phone_otp) != 6 or not normalized_phone_otp.isdigit():
+                raise RapexAPIException('Please verify your phone OTP before submission.', code='phone_not_verified', status_code=400)
+            OTPService.verify_otp(user.phone, normalized_phone_otp, OTPRecord.Purpose.PHONE_VERIFICATION)
+            state.phone_verified = True
 
         business_profile = MerchantBusinessProfile.objects.filter(merchant=merchant_profile).first()
         location = MerchantLocation.objects.filter(merchant=merchant_profile).first()
