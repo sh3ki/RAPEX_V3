@@ -11,6 +11,8 @@ interface ProfileImageUploadProps {
   remoteImageUrl?: string;
   initials?: string;
   disabled?: boolean;
+  maxSizeMB?: number;
+  onValidationError?: (message: string) => void;
   onFileChange: (file: File | null) => void;
 }
 
@@ -20,6 +22,8 @@ export function ProfileImageUpload({
   remoteImageUrl,
   initials = 'M',
   disabled = false,
+  maxSizeMB = 5,
+  onValidationError,
   onFileChange,
 }: ProfileImageUploadProps) {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -47,8 +51,16 @@ export function ProfileImageUpload({
     }
     const candidate = nextFiles[0];
     if (!candidate.type.startsWith('image/')) {
+      onValidationError?.('Profile image must be an image file.');
       return;
     }
+
+    const maxSizeBytes = maxSizeMB * 1024 * 1024;
+    if (candidate.size > maxSizeBytes) {
+      onValidationError?.(`Profile image exceeds ${maxSizeMB}MB size limit.`);
+      return;
+    }
+
     onFileChange(candidate);
   }
 
@@ -103,7 +115,7 @@ export function ProfileImageUpload({
 
         <div className="flex-1">
           <p className="text-sm font-semibold text-slate-800">Drop images here or click to browse.</p>
-          <p className="mt-1 text-xs text-slate-500">PNG, JPEG, and WEBP are supported.</p>
+          <p className="mt-1 text-xs text-slate-500">PNG, JPEG, and WEBP are supported up to {maxSizeMB}MB.</p>
         </div>
 
         <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-300 bg-white text-slate-500 shadow-sm">
