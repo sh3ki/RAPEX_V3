@@ -1,7 +1,7 @@
 'use client';
 
 import { Check, ChevronDown } from 'lucide-react';
-import { useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue';
 import { useOutsideClick } from '../../hooks/useOutsideClick';
 import type { SelectOption } from '../../types';
@@ -36,9 +36,58 @@ export function Dropdown({
 }: DropdownProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState('');
+  const [menuMaxHeight, setMenuMaxHeight] = useState(320);
   const debouncedQuery = useDebouncedValue(query, debounceMs);
   const wrapperRef = useRef<HTMLDivElement>(null);
+
   useOutsideClick(wrapperRef, () => setIsOpen(false));
+
+  const updateMenuMaxHeight = useCallback(() => {
+    if (!wrapperRef.current) {
+      return;
+    }
+
+    const triggerRect = wrapperRef.current.getBoundingClientRect();
+    let clipTop = 0;
+    let clipBottom = window.innerHeight;
+
+    let ancestor: HTMLElement | null = wrapperRef.current.parentElement;
+    while (ancestor) {
+      const style = window.getComputedStyle(ancestor);
+      const overflowSignature = `${style.overflow} ${style.overflowY} ${style.overflowX}`;
+      if (/(auto|scroll|hidden|clip)/.test(overflowSignature)) {
+        const rect = ancestor.getBoundingClientRect();
+        clipTop = Math.max(clipTop, rect.top);
+        clipBottom = Math.min(clipBottom, rect.bottom);
+      }
+      ancestor = ancestor.parentElement;
+    }
+
+    const margin = 10;
+    const availableBelow = Math.max(0, clipBottom - triggerRect.bottom - margin);
+    const availableAbove = Math.max(0, triggerRect.top - clipTop - margin);
+
+    // Preserve normal dropdown behavior (open below), only fallback above when below has no space.
+    const boundedHeight = availableBelow > 0 ? availableBelow : availableAbove;
+    setMenuMaxHeight(Math.min(380, boundedHeight));
+  }, []);
+
+  useEffect(() => {
+    if (!isOpen) {
+      return;
+    }
+
+    updateMenuMaxHeight();
+
+    const onLayoutChange = () => updateMenuMaxHeight();
+    window.addEventListener('resize', onLayoutChange);
+    window.addEventListener('scroll', onLayoutChange, true);
+
+    return () => {
+      window.removeEventListener('resize', onLayoutChange);
+      window.removeEventListener('scroll', onLayoutChange, true);
+    };
+  }, [isOpen, updateMenuMaxHeight]);
 
   const selected = options.find((item) => item.value === value);
   const canSearch = options.length >= searchThreshold;
@@ -65,6 +114,7 @@ export function Dropdown({
       {label ? <label className={cn('text-sm font-semibold', error ? 'text-red-700' : 'text-slate-700')}>{label}</label> : null}
       <button
         type="button"
+        aria-expanded={isOpen}
         disabled={disabled}
         onClick={() => setIsOpen((prev) => !prev)}
         className={cn(
@@ -84,11 +134,14 @@ export function Dropdown({
       </button>
 
       {isOpen ? (
-        <div className="mt-2 w-full max-w-full rounded-xl border border-slate-200 bg-white p-2 shadow-lg shadow-slate-900/10">
+        <div
+          className="absolute left-0 right-0 z-50 mt-2 flex w-full max-w-full flex-col overflow-hidden rounded-xl border border-slate-200 bg-white p-2 shadow-lg shadow-slate-900/10"
+          style={{ maxHeight: `${menuMaxHeight}px` }}
+        >
           {canSearch ? (
             <SearchBar value={query} onChange={setQuery} placeholder="Search option..." className="max-w-none" />
           ) : null}
-          <div className="mt-2 max-h-[min(16rem,40vh)] overflow-auto overscroll-contain">
+          <div className="mt-2 min-h-0 overflow-auto overscroll-contain">
             {filteredOptions.length ? (
               filteredOptions.map((option) => (
                 <button
