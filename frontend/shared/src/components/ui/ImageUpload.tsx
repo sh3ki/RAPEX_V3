@@ -3,12 +3,18 @@
 import { Image as ImageIcon, Upload, X } from 'lucide-react';
 import Image from 'next/image';
 import { useEffect, useMemo, useRef } from 'react';
+import { organizeUploadSelection, type UploadSortOrder } from '../../utils/upload';
 
 interface ImageUploadProps {
   label?: string;
   files: File[];
   onFilesChange: (files: File[]) => void;
   multiple?: boolean;
+  maxFiles?: number;
+  helperText?: string;
+  sortOrder?: UploadSortOrder;
+  previewAspect?: 'default' | 'landscape';
+  previewFit?: 'cover' | 'contain';
 }
 
 export function ImageUpload({
@@ -16,6 +22,11 @@ export function ImageUpload({
   files,
   onFilesChange,
   multiple = true,
+  maxFiles,
+  helperText,
+  sortOrder = 'name',
+  previewAspect = 'default',
+  previewFit = 'cover',
 }: ImageUploadProps) {
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -37,8 +48,14 @@ export function ImageUpload({
       return;
     }
 
-    const incoming = Array.from(newFiles).filter((fileItem) => fileItem.type.startsWith('image/'));
-    onFilesChange(multiple ? [...files, ...incoming] : incoming.slice(0, 1));
+    const incoming = Array.from(newFiles);
+    const nextFiles = organizeUploadSelection(files, incoming, {
+      multiple,
+      maxFiles,
+      onlyImages: true,
+      sortOrder,
+    });
+    onFilesChange(nextFiles);
   }
 
   return (
@@ -63,7 +80,7 @@ export function ImageUpload({
       >
         <Upload className="mx-auto mb-2 text-slate-400" size={22} />
         <p className="font-semibold text-slate-700">Drop images here or click to browse</p>
-        <p className="mt-1 text-xs text-slate-500">PNG, JPEG, and WEBP are supported.</p>
+        <p className="mt-1 text-xs text-slate-500">{helperText || 'PNG, JPEG, and WEBP are supported.'}</p>
       </div>
       <input
         ref={inputRef}
@@ -71,7 +88,10 @@ export function ImageUpload({
         accept="image/*"
         multiple={multiple}
         className="hidden"
-        onChange={(event) => addFiles(event.target.files)}
+        onChange={(event) => {
+          addFiles(event.target.files);
+          event.currentTarget.value = '';
+        }}
       />
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
         {previews.map((preview, index) => (
@@ -81,7 +101,11 @@ export function ImageUpload({
               alt={preview.file.name}
               width={240}
               height={180}
-              className="h-28 w-full object-cover"
+              className={
+                previewAspect === 'landscape'
+                  ? `aspect-video w-full ${previewFit === 'contain' ? 'bg-slate-100 object-contain' : 'object-cover'}`
+                  : `h-28 w-full ${previewFit === 'contain' ? 'bg-slate-100 object-contain' : 'object-cover'}`
+              }
               unoptimized
             />
             <div className="flex items-center justify-between border-t border-slate-100 px-2 py-1.5 text-xs text-slate-600">
