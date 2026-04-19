@@ -24,6 +24,8 @@ from .serializers import (
     MerchantOnboardingProfileImageUploadSerializer,
     MerchantOnboardingDocumentsStepSerializer,
     MerchantOnboardingVerificationStepSerializer,
+    MerchantOnboardingSendOtpSerializer,
+    MerchantOnboardingVerifyOtpSerializer,
     MerchantOnboardingStateSerializer,
     MerchantBusinessProfileSerializer,
     MerchantLocationSerializer,
@@ -191,6 +193,7 @@ class MerchantOnboardingStateView(APIView):
                     'username': request.user.username,
                     'phone_number': request.user.phone,
                     'profile_image_url': profile_image_url,
+                    'has_saved_password': request.user.has_usable_password(),
                 },
                 'business': MerchantBusinessProfileSerializer(business_profile).data if business_profile else None,
                 'location': MerchantLocationSerializer(location).data if location else None,
@@ -234,7 +237,10 @@ class MerchantOnboardingDocumentsStepView(APIView):
     permission_classes = [IsAuthenticated, IsMerchant]
 
     def post(self, request):
-        serializer = MerchantOnboardingDocumentsStepSerializer(data=request.data)
+        serializer = MerchantOnboardingDocumentsStepSerializer(
+            data=request.data,
+            context={'merchant_profile': request.user.merchantprofile},
+        )
         serializer.is_valid(raise_exception=True)
         state = MerchantService.save_documents_step(request.user.merchantprofile, serializer.validated_data)
         return Response(MerchantOnboardingStateSerializer(state).data, status=status.HTTP_200_OK)
@@ -297,8 +303,28 @@ class MerchantOnboardingSendOtpView(APIView):
     permission_classes = [IsAuthenticated, IsMerchant]
 
     def post(self, request):
-        result = MerchantService.send_verification_otps(request.user.merchantprofile)
+        serializer = MerchantOnboardingSendOtpSerializer(data=request.data or {})
+        serializer.is_valid(raise_exception=True)
+        result = MerchantService.send_verification_otps(
+            request.user.merchantprofile,
+            channel=serializer.validated_data['channel'],
+        )
         return Response(result, status=status.HTTP_200_OK)
+
+
+class MerchantOnboardingVerifyOtpView(APIView):
+    permission_classes = [IsAuthenticated, IsMerchant]
+
+    def post(self, request):
+        serializer = MerchantOnboardingVerifyOtpSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        state = MerchantService.verify_verification_otp(
+            request.user.merchantprofile,
+            channel=data['channel'],
+            otp_code=data['otp_code'],
+        )
+        return Response(MerchantOnboardingStateSerializer(state).data, status=status.HTTP_200_OK)
 
 
 class MerchantOnboardingSubmitView(APIView):
