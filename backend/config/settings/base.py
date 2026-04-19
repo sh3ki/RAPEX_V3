@@ -361,6 +361,23 @@ LOGGING = {
 # ─────────────────────────────────────────────────────────────────────
 # EXTERNAL API KEYS
 # ─────────────────────────────────────────────────────────────────────
+# Email delivery (SMTP)
+EMAIL_BACKEND = config('EMAIL_BACKEND', default='django.core.mail.backends.smtp.EmailBackend')
+EMAIL_HOST = config('EMAIL_HOST', default='smtp.gmail.com')
+EMAIL_PORT = config('EMAIL_PORT', default=587, cast=int)
+EMAIL_HOST_USER = config('EMAIL_HOST_USER', default='')
+EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='')
+EMAIL_USE_TLS = config('EMAIL_USE_TLS', default=True, cast=bool)
+EMAIL_USE_SSL = config('EMAIL_USE_SSL', default=False, cast=bool)
+DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='RAPEX <no-reply@rapex.local>')
+SERVER_EMAIL = config('SERVER_EMAIL', default=DEFAULT_FROM_EMAIL)
+
+# SMS delivery
+SMS_PROVIDER = config('SMS_PROVIDER', default='PHILSMS')
+PHILSMS_API_URL = config('PHILSMS_API_URL', default='https://app.philsms.com/api/v3/sms/send')
+PHILSMS_API_TOKEN = config('PHILSMS_API_TOKEN', default='')
+PHILSMS_SENDER_ID = config('PHILSMS_SENDER_ID', default='RAPEX')
+
 SEMAPHORE_API_KEY = config('SEMAPHORE_API_KEY', default='')
 SEMAPHORE_SENDER_NAME = config('SEMAPHORE_SENDER_NAME', default='RAPEX')
 GOOGLE_MAPS_API_KEY = config('GOOGLE_MAPS_API_KEY', default='')
