@@ -1,7 +1,7 @@
 # RAPEX Technologies OPC — FULL PROJECT PROGRESS TRACKER
 
 > **Last Updated:** April 18, 2026  
-> **Updated By:** GitHub Copilot (onboarding validation/toast pass + phone sync hardening + wizard/dropdown alignment)  
+> **Updated By:** GitHub Copilot (onboarding recapture/docs/final-review stabilization + OTP/legal/provider updates)  
 > **Version:** 1.0 MVP  
 > **Overall Progress (estimated from implemented code):** ![59%](https://progress-bar.xyz/59)
 
@@ -87,7 +87,25 @@
 - [x] Required onboarding fields now render red validation states across profile, business, location, and verification steps
 - [x] Merchant onboarding phone sync refactored to handler-driven updates to prevent update-depth recursion during local syncing
 - [x] Location-step validation now trims required text fields and accepts valid numeric coordinates without strict range blocking
-- [x] Local development cleanup completed: hard deletion of `shekaigarcia@gmail.com` merchant account and related onboarding records
+- [x] Local development cleanup completed: hard deletion of `shekaigarcia@gmail.com` and `berlyneugenio657@gmail.com` accounts and related onboarding records
+- [x] Merchant onboarding documents are now preview-only before save; uploads/storage-path persistence happen only when user clicks `Next` on Documents step
+- [x] Selfie with ID now uses dedicated capture modal with camera selector, 16:9 live frame, no mirror mode, and browser-side capture fallback (no face-detection dependency)
+- [x] Valid ID requirements migrated to separate inline single-image `VALID_ID_FRONT` and `VALID_ID_BACK` uploads with per-field preview
+- [x] Unregistered registration-type document matrix now includes optional `Other Documents`
+- [x] Onboarding document limits now enforce single-file for all types except `OTHER` (up to 3), plus 10MB max file size across frontend and backend validators
+- [x] Documents step now separates storage paths from preview URLs, so fetched files reliably render after page reload
+- [x] Documents step now supports per-document remove (`X`) actions for saved files, persisted on `Next` by omission from payload
+- [x] Selfie with ID preview was resized to compact card dimensions for better step layout balance
+- [x] Recapture flow now reattaches stream and video readiness state to prevent intermittent black camera frame
+- [x] Verification step now uses shared 6-digit `OtpInput` slots for both email and phone OTP fields
+- [x] Verification legal acceptance consolidated into one checkbox with linked `Privacy Policy` and `Terms & Conditions`, while persisting both backend flags
+- [x] Final Review section expanded with detailed profile/business/location/documents summary including inline document previews
+- [x] Backend now supports SMTP env configuration in base settings and optional dev-console override via `DEV_USE_CONSOLE_EMAIL_BACKEND`
+- [x] Backend SMS provider routing now supports PhilSMS primary delivery with Semaphore fallback
+- [x] Shared Dropdown and MultiSelect components now open in popup modal overlays (portal-based) to prevent form-container clipping
+- [x] Map picker now starts at a closer default zoom and preserves user zoom level while moving map pins
+- [x] Valid ID front/back previews now render in 16:9 landscape with object-contain for both staged and saved files
+- [x] Country-code seeding now covers all dialing regions and DB schema now supports non-unique dial codes shared by multiple countries
 - [~] Running Docker backend seed command still appears to use an older source variant that omits merchant onboarding catalog seeding; source parity follow-up remains
 - [~] Web dashboards implemented but integration still incomplete
 - [ ] Mobile app implementation started
