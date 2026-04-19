@@ -33,6 +33,7 @@ export function MapPickerModal({
   const mapRef = useRef<HTMLDivElement | null>(null);
   const instanceRef = useRef<any>(null);
   const markerRef = useRef<any>(null);
+  const zoomRef = useRef<number>(16);
   const [selectedLat, setSelectedLat] = useState(latitude);
   const [selectedLng, setSelectedLng] = useState(longitude);
 
@@ -53,7 +54,7 @@ export function MapPickerModal({
 
       const lat = Number(selectedLat || '14.5995');
       const lng = Number(selectedLng || '120.9842');
-      const map = window.L.map(mapRef.current).setView([lat, lng], 13);
+      const map = window.L.map(mapRef.current).setView([lat, lng], zoomRef.current || 16);
       window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '&copy; OpenStreetMap contributors',
       }).addTo(map);
@@ -64,6 +65,10 @@ export function MapPickerModal({
         markerRef.current.setLatLng([newLat, newLng]);
         setSelectedLat(String(newLat));
         setSelectedLng(String(newLng));
+      });
+
+      map.on('zoomend', () => {
+        zoomRef.current = map.getZoom();
       });
 
       instanceRef.current = map;
@@ -101,6 +106,20 @@ export function MapPickerModal({
         markerRef.current = null;
       }
     };
+  }, [open, provider]);
+
+  useEffect(() => {
+    if (!open || provider !== 'leaflet' || !instanceRef.current || !markerRef.current) {
+      return;
+    }
+
+    const lat = Number(selectedLat);
+    const lng = Number(selectedLng);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+      return;
+    }
+
+    markerRef.current.setLatLng([lat, lng]);
   }, [open, provider, selectedLat, selectedLng]);
 
   const useCurrentLocation = () => {
@@ -114,7 +133,7 @@ export function MapPickerModal({
           markerRef.current.setLatLng([lat, lng]);
         }
         if (instanceRef.current) {
-          instanceRef.current.setView([lat, lng], 15);
+          instanceRef.current.setView([lat, lng], zoomRef.current || 16);
         }
       },
       () => undefined,
