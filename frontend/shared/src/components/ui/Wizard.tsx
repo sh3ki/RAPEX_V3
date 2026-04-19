@@ -37,18 +37,19 @@ export function Wizard({
   return (
     <div className="rounded-2xl border border-slate-200 bg-white shadow-lg shadow-slate-900/5">
       <div className="border-b border-slate-200/80 px-4 py-6 sm:px-6">
-        <ol className="flex items-start justify-between gap-2 overflow-x-auto pb-1">
+        <ol className="flex items-start justify-between gap-0 overflow-x-auto pb-1">
           {steps.map((step, index) => {
             const active = index === currentStep;
             const done = index < currentStep;
             const upcoming = index > currentStep;
 
             return (
-              <li key={step.id} className="relative min-w-[126px] flex-1">
+              <li key={step.id} className="relative min-w-[126px] flex-1 px-1">
                 {index < steps.length - 1 ? (
                   <span
                     className={cn(
-                      'pointer-events-none absolute left-1/2 top-[22px] z-0 h-[2px] w-[calc(100%-2.75rem)]',
+                      'pointer-events-none absolute top-[22px] z-0 h-[2px]',
+                      'left-[calc(50%+1.375rem)] right-[calc(-50%+1.375rem)]',
                       done || active ? 'bg-primary-200' : 'bg-slate-200',
                     )}
                   />
