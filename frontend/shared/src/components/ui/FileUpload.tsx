@@ -2,6 +2,7 @@
 
 import { File as FileIcon, Upload, X } from 'lucide-react';
 import { useRef } from 'react';
+import { formatFileSize, organizeUploadSelection, type UploadSortOrder } from '../../utils/upload';
 
 interface FileUploadProps {
   label?: string;
@@ -9,6 +10,9 @@ interface FileUploadProps {
   onFilesChange: (files: globalThis.File[]) => void;
   accept?: string;
   multiple?: boolean;
+  maxFiles?: number;
+  helperText?: string;
+  sortOrder?: UploadSortOrder;
 }
 
 export function FileUpload({
@@ -17,6 +21,9 @@ export function FileUpload({
   onFilesChange,
   accept,
   multiple = true,
+  maxFiles,
+  helperText,
+  sortOrder = 'name',
 }: FileUploadProps) {
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -24,8 +31,14 @@ export function FileUpload({
     if (!newFiles) {
       return;
     }
+
     const incoming = Array.from(newFiles);
-    onFilesChange(multiple ? [...files, ...incoming] : incoming.slice(0, 1));
+    const nextFiles = organizeUploadSelection(files, incoming, {
+      multiple,
+      maxFiles,
+      sortOrder,
+    });
+    onFilesChange(nextFiles);
   }
 
   return (
@@ -50,7 +63,7 @@ export function FileUpload({
       >
         <Upload className="mx-auto mb-2 text-slate-400" size={22} />
         <p className="font-semibold text-slate-700">Drop files here or click to browse</p>
-        <p className="mt-1 text-xs text-slate-500">Accepted format is based on form requirements.</p>
+        <p className="mt-1 text-xs text-slate-500">{helperText || 'Accepted format is based on form requirements.'}</p>
       </div>
       <input
         ref={inputRef}
@@ -58,14 +71,20 @@ export function FileUpload({
         accept={accept}
         multiple={multiple}
         className="hidden"
-        onChange={(event) => addFiles(event.target.files)}
+        onChange={(event) => {
+          addFiles(event.target.files);
+          event.currentTarget.value = '';
+        }}
       />
       <div className="space-y-1">
         {files.map((fileItem, index) => (
           <div key={`${fileItem.name}-${index}`} className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm">
-            <div className="flex items-center gap-2 text-slate-700">
+            <div className="flex min-w-0 items-center gap-2 text-slate-700">
               <FileIcon size={14} />
-              <span className="truncate">{fileItem.name}</span>
+              <div className="min-w-0">
+                <p className="truncate font-medium">{fileItem.name}</p>
+                <p className="text-xs text-slate-500">{formatFileSize(fileItem.size)}</p>
+              </div>
             </div>
             <button
               type="button"
