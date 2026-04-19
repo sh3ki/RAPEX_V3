@@ -7,11 +7,11 @@ import logging
 import random
 import string
 from datetime import timedelta
-from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
+from urllib.parse import parse_qsl, urlencode, urljoin, urlparse, urlunparse
 
 import requests
 from django.conf import settings
-from django.core.mail import send_mail
+from django.core.mail import EmailMultiAlternatives, send_mail
 from django.db import transaction
 from django.utils import timezone
 from django.utils.crypto import get_random_string
@@ -39,6 +39,95 @@ logger = logging.getLogger(__name__)
 
 class OTPService:
     """Handles OTP generation, delivery, and verification."""
+
+    @staticmethod
+    def _expiry_minutes(expiry_seconds: int) -> int:
+        seconds = int(expiry_seconds or 0)
+        if seconds <= 0:
+            return 1
+        return max(1, (seconds + 59) // 60)
+
+    @staticmethod
+    def _purpose_label(purpose: str) -> str:
+        mapping = {
+            OTPRecord.Purpose.EMAIL_VERIFICATION: 'email verification',
+            OTPRecord.Purpose.PHONE_VERIFICATION: 'phone verification',
+            OTPRecord.Purpose.REGISTRATION: 'account registration',
+            OTPRecord.Purpose.LOGIN: 'login verification',
+            OTPRecord.Purpose.RESET: 'password reset',
+            OTPRecord.Purpose.MAGIC_LINK: 'secure sign-in',
+        }
+        return mapping.get(purpose, 'verification')
+
+    @staticmethod
+    def _build_sms_otp_message(otp_code: str, purpose: str, expiry_seconds: int) -> str:
+        expiry_minutes = OTPService._expiry_minutes(expiry_seconds)
+        purpose_label = OTPService._purpose_label(purpose)
+        return (
+            f'RAPEX Security Code: {otp_code}. '
+            f'Use this for {purpose_label}. '
+            f'Expires in {expiry_minutes} minutes. Do not share this code.'
+        )
+
+    @staticmethod
+    def _build_email_otp_content(otp_code: str, purpose: str, expiry_seconds: int) -> tuple[str, str, str]:
+        expiry_minutes = OTPService._expiry_minutes(expiry_seconds)
+        purpose_label = OTPService._purpose_label(purpose)
+
+        subject = 'RAPEX Security Verification Code'
+        text_message = (
+            'RAPEX Security Verification\n\n'
+            f'Your one-time verification code is: {otp_code}\n\n'
+            f'This code is for {purpose_label} and expires in {expiry_minutes} minutes.\n'
+            'If you did not request this code, please ignore this message.\n\n'
+            'For your security, never share this code with anyone.\n\n'
+            'RAPEX Security Team'
+        )
+
+        html_message = f"""
+<!doctype html>
+<html>
+    <body style="margin:0;padding:0;background:#f5f7fb;font-family:Arial,sans-serif;color:#0f172a;">
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="padding:24px 12px;">
+            <tr>
+                <td align="center">
+                    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:560px;background:#ffffff;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;">
+                        <tr>
+                            <td style="padding:20px 24px;background:#0f172a;color:#ffffff;">
+                                <div style="font-size:14px;letter-spacing:0.08em;text-transform:uppercase;opacity:0.9;">RAPEX</div>
+                                <div style="margin-top:6px;font-size:20px;font-weight:700;">Security Verification</div>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td style="padding:24px;">
+                                <p style="margin:0 0 10px 0;font-size:14px;line-height:1.6;color:#334155;">
+                                    Use the one-time code below to complete your {purpose_label}.
+                                </p>
+                                <div style="margin:16px 0;padding:14px 16px;border:1px dashed #94a3b8;border-radius:10px;background:#f8fafc;text-align:center;">
+                                    <span style="font-size:30px;font-weight:700;letter-spacing:0.22em;color:#0f172a;">{otp_code}</span>
+                                </div>
+                                <p style="margin:0 0 10px 0;font-size:13px;line-height:1.6;color:#475569;">
+                                    This code expires in <strong>{expiry_minutes} minutes</strong>.
+                                </p>
+                                <p style="margin:0;font-size:13px;line-height:1.6;color:#475569;">
+                                    If you did not request this code, you can safely ignore this email.
+                                </p>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td style="padding:14px 24px;background:#f8fafc;border-top:1px solid #e2e8f0;font-size:12px;color:#64748b;line-height:1.5;">
+                                For your protection, RAPEX will never ask for your OTP.
+                            </td>
+                        </tr>
+                    </table>
+                </td>
+            </tr>
+        </table>
+    </body>
+</html>
+""".strip()
+
+        return subject, text_message, html_message
 
     @staticmethod
     def request_otp(phone: str, purpose: str) -> dict:
@@ -69,8 +158,20 @@ class OTPService:
             expires_at=expires_at,
         )
 
-        # Send via Semaphore SMS (Philippines)
-        OTPService._send_sms(phone, otp_code)
+        # Send via configured SMS provider (PhilSMS by default)
+        delivered = OTPService._send_sms(
+            phone=phone,
+            otp_code=otp_code,
+            purpose=purpose,
+            expiry_seconds=settings.RAPEX_OTP_EXPIRY_SECONDS,
+        )
+        if not delivered:
+            otp_record.delete()
+            raise RapexAPIException(
+                'SMS OTP service is not configured or delivery failed. Please configure PhilSMS or Semaphore credentials.',
+                code='sms_otp_delivery_failed',
+                status_code=503,
+            )
 
         logger.info(f"OTP sent to {phone} for {purpose}")
         return {
@@ -130,12 +231,147 @@ class OTPService:
         return str(token)
 
     @staticmethod
-    def _send_sms(phone: str, otp_code: str):
-        """Send OTP via Semaphore SMS API."""
+    def _send_sms(phone: str, otp_code: str, purpose: str, expiry_seconds: int) -> bool:
+        """Send OTP via configured provider (PhilSMS or Semaphore)."""
+        provider = str(getattr(settings, 'SMS_PROVIDER', 'PHILSMS') or 'PHILSMS').upper().strip()
+        message = OTPService._build_sms_otp_message(otp_code=otp_code, purpose=purpose, expiry_seconds=expiry_seconds)
+
+        if provider == 'SEMAPHORE':
+            return OTPService._send_sms_via_semaphore(phone, message)
+
+        if provider == 'PHILSMS':
+            if OTPService._send_sms_via_philsms(phone, message):
+                return True
+
+            # Automatic fallback to Semaphore if PhilSMS is unavailable.
+            logger.warning('PhilSMS delivery failed or is not configured. Falling back to Semaphore provider.')
+            return OTPService._send_sms_via_semaphore(phone, message)
+
+        logger.warning(f"Unknown SMS_PROVIDER '{provider}'. Falling back to PhilSMS then Semaphore.")
+        if OTPService._send_sms_via_philsms(phone, message):
+            return True
+        return OTPService._send_sms_via_semaphore(phone, message)
+
+    @staticmethod
+    def _send_sms_via_philsms(phone: str, message: str) -> bool:
+        api_token = str(getattr(settings, 'PHILSMS_API_TOKEN', '') or '').strip()
+        api_url = str(getattr(settings, 'PHILSMS_API_URL', '') or '').strip()
+
+        if not api_token or not api_url or api_token == 'your-philsms-api-token':
+            logger.warning(f"[DEV] PhilSMS not configured — OTP for {phone}: {message}")
+            return False
+
+        # Support OAuth-style tokens like "377|token-value".
+        auth_token = api_token.split('|', 1)[1].strip() if '|' in api_token else api_token
+
+        # Support either full send endpoint or base API root (e.g. .../api/v3/).
+        normalized_url = api_url.rstrip('/')
+        if normalized_url.endswith('/api/v3'):
+            send_url = urljoin(f"{normalized_url}/", 'sms/send')
+        else:
+            send_url = api_url
+
+        try:
+            payload = {
+                'recipient': phone,
+                'sender_id': getattr(settings, 'PHILSMS_SENDER_ID', 'RAPEX'),
+                'type': 'plain',
+                'message': message,
+            }
+
+            response = requests.post(
+                send_url,
+                headers={
+                    'Authorization': f'Bearer {auth_token}',
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json',
+                },
+                json=payload,
+                timeout=10,
+            )
+            response.raise_for_status()
+
+            # PhilSMS can return HTTP 200 with a JSON error payload.
+            payload = {}
+            try:
+                payload = response.json() if response.content else {}
+            except ValueError:
+                payload = {}
+
+            if isinstance(payload, dict):
+                status = str(payload.get('status', '') or '').strip().lower()
+                if status and status not in {'success', 'ok', 'queued'}:
+                    logger.error(
+                        "PhilSMS rejected message for %s: status=%s message=%s",
+                        phone,
+                        status,
+                        payload.get('message'),
+                    )
+                    return False
+
+                if 'error' in payload and payload.get('error'):
+                    logger.error("PhilSMS error for %s: %s", phone, payload.get('error'))
+                    return False
+
+                message_text = str(payload.get('message', '') or '').strip().lower()
+                if 'unauthenticated' in message_text:
+                    logger.error("PhilSMS authentication failed for %s: %s", phone, payload.get('message'))
+                    return False
+
+                # Backward compatibility: some legacy endpoints may still expect form payload.
+                if 'recipient field is required' in message_text:
+                    legacy_response = requests.post(
+                        send_url,
+                        data={
+                            'recipient': phone,
+                            'sender_id': getattr(settings, 'PHILSMS_SENDER_ID', 'RAPEX'),
+                            'type': 'plain',
+                            'message': message,
+                            'api_token': auth_token,
+                        },
+                        headers={
+                            'Authorization': f'Bearer {auth_token}',
+                            'Accept': 'application/json',
+                        },
+                        timeout=10,
+                    )
+                    legacy_response.raise_for_status()
+
+                    legacy_payload = {}
+                    try:
+                        legacy_payload = legacy_response.json() if legacy_response.content else {}
+                    except ValueError:
+                        legacy_payload = {}
+
+                    legacy_status = str(legacy_payload.get('status', '') or '').strip().lower() if isinstance(legacy_payload, dict) else ''
+                    if legacy_status and legacy_status not in {'success', 'ok', 'queued'}:
+                        logger.error(
+                            "PhilSMS legacy payload rejected message for %s: status=%s message=%s",
+                            phone,
+                            legacy_status,
+                            legacy_payload.get('message') if isinstance(legacy_payload, dict) else None,
+                        )
+                        return False
+
+                    if isinstance(legacy_payload, dict) and 'unauthenticated' in str(legacy_payload.get('message', '') or '').strip().lower():
+                        logger.error("PhilSMS legacy authentication failed for %s: %s", phone, legacy_payload.get('message'))
+                        return False
+
+                    logger.info(f"SMS sent to {phone} via PhilSMS (legacy payload)")
+                    return True
+
+            logger.info(f"SMS sent to {phone} via PhilSMS")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to send SMS to {phone} via PhilSMS: {e}")
+            return False
+
+    @staticmethod
+    def _send_sms_via_semaphore(phone: str, message: str) -> bool:
         api_key = settings.SEMAPHORE_API_KEY
         if not api_key or api_key == 'your-semaphore-api-key':
-            logger.warning(f"[DEV] SMS not sent — OTP for {phone}: {otp_code}")
-            return
+            logger.warning(f"[DEV] Semaphore not configured — OTP for {phone}: {message}")
+            return False
 
         try:
             response = requests.post(
@@ -143,21 +379,43 @@ class OTPService:
                 data={
                     'apikey': api_key,
                     'number': phone,
-                    'message': f'Your RAPEX verification code is: {otp_code}. Valid for 5 minutes.',
+                    'message': message,
                     'sendername': settings.SEMAPHORE_SENDER_NAME,
                 },
                 timeout=10,
             )
             response.raise_for_status()
             logger.info(f"SMS sent to {phone} via Semaphore")
+            return True
         except Exception as e:
-            logger.error(f"Failed to send SMS to {phone}: {e}")
+            logger.error(f"Failed to send SMS to {phone} via Semaphore: {e}")
+            return False
 
     @staticmethod
     def request_email_otp(email: str, purpose: str) -> dict:
+        email_backend = str(getattr(settings, 'EMAIL_BACKEND', '') or '').strip()
+        email_host_user = str(getattr(settings, 'EMAIL_HOST_USER', '') or '').strip()
+        email_host_password = str(getattr(settings, 'EMAIL_HOST_PASSWORD', '') or '').strip()
+
+        if (
+            email_backend == 'django.core.mail.backends.smtp.EmailBackend'
+            and (
+                not email_host_user
+                or not email_host_password
+                or email_host_user == 'your-smtp-username'
+                or email_host_password == 'your-smtp-password'
+            )
+        ):
+            raise RapexAPIException(
+                'Email OTP service is not configured. Please set valid SMTP credentials.',
+                code='email_otp_not_configured',
+                status_code=503,
+            )
+
         otp_code = ''.join(random.choices(string.digits, k=6))
-        expires_at = timezone.now() + timedelta(minutes=15)
-        OTPRecord.objects.create(
+        email_expiry_seconds = int(getattr(settings, 'RAPEX_EMAIL_OTP_EXPIRY_SECONDS', 900) or 900)
+        expires_at = timezone.now() + timedelta(seconds=email_expiry_seconds)
+        otp_record = OTPRecord.objects.create(
             email=email.lower(),
             channel=OTPRecord.Channel.EMAIL,
             otp_code=otp_code,
@@ -165,13 +423,41 @@ class OTPService:
             expires_at=expires_at,
         )
 
-        subject = 'RAPEX verification code'
-        message = f'Your verification code is {otp_code}. This code expires in 15 minutes.'
-        send_mail(subject, message, settings.DEFAULT_FROM_EMAIL, [email], fail_silently=bool(settings.DEBUG))
+        subject, text_message, html_message = OTPService._build_email_otp_content(
+            otp_code=otp_code,
+            purpose=purpose,
+            expiry_seconds=email_expiry_seconds,
+        )
+        try:
+            email_message = EmailMultiAlternatives(
+                subject=subject,
+                body=text_message,
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                to=[email],
+            )
+            email_message.attach_alternative(html_message, 'text/html')
+            delivered_count = email_message.send(fail_silently=False)
+            if delivered_count < 1:
+                raise RapexAPIException(
+                    'Email OTP could not be delivered. Please verify SMTP configuration.',
+                    code='email_otp_delivery_failed',
+                    status_code=503,
+                )
+        except RapexAPIException:
+            otp_record.delete()
+            raise
+        except Exception as exc:
+            otp_record.delete()
+            logger.error(f"Failed to send email OTP to {email}: {exc}")
+            raise RapexAPIException(
+                'Email OTP delivery failed. Please check SMTP credentials and sender settings.',
+                code='email_otp_delivery_failed',
+                status_code=503,
+            )
 
         return {
             'message': 'OTP sent successfully.',
-            'expires_in': 900,
+            'expires_in': email_expiry_seconds,
         }
 
     @staticmethod
