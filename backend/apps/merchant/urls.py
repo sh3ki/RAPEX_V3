@@ -18,6 +18,7 @@ urlpatterns = [
     path('onboarding/upload-profile-image/', views.MerchantOnboardingProfileImageUploadView.as_view(), name='merchant-onboarding-upload-profile-image'),
     path('onboarding/step/documents/', views.MerchantOnboardingDocumentsStepView.as_view(), name='merchant-onboarding-step-documents'),
     path('onboarding/send-otp/', views.MerchantOnboardingSendOtpView.as_view(), name='merchant-onboarding-send-otp'),
+    path('onboarding/verify-otp/', views.MerchantOnboardingVerifyOtpView.as_view(), name='merchant-onboarding-verify-otp'),
     path('onboarding/submit/', views.MerchantOnboardingSubmitView.as_view(), name='merchant-onboarding-submit'),
 ]
 
