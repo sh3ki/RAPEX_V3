@@ -80,7 +80,7 @@ class MerchantMarkupOverride(BaseModel):
 
 class MerchantCountryCode(BaseModel):
     country_name = models.CharField(max_length=120, unique=True)
-    country_code = models.CharField(max_length=8, unique=True)
+    country_code = models.CharField(max_length=8)
     country_flag_emoji = models.CharField(max_length=8, blank=True, default='')
     max_digits = models.PositiveSmallIntegerField(default=10)
     is_default = models.BooleanField(default=False)
@@ -189,7 +189,8 @@ class MerchantLocation(BaseModel):
 class MerchantDocument(BaseModel):
     class DocumentType(models.TextChoices):
         SELFIE_WITH_ID = 'SELFIE_WITH_ID', 'Selfie with ID'
-        VALID_ID = 'VALID_ID', 'Valid ID'
+        VALID_ID_FRONT = 'VALID_ID_FRONT', 'Valid ID (Front)'
+        VALID_ID_BACK = 'VALID_ID_BACK', 'Valid ID (Back)'
         BARANGAY_PERMIT = 'BARANGAY_PERMIT', 'Barangay Permit'
         DTI_OR_SEC = 'DTI_OR_SEC', 'DTI or SEC Certificate'
         BIR_2303 = 'BIR_2303', 'BIR Certificate of Registration (Form 2303)'
