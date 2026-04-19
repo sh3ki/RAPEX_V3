@@ -39,6 +39,8 @@ google-auth==2.39.0
 
 # ── Environment Variables ─────────────────────────
 python-decouple==3.8
+phonenumberslite==9.0.28
+pycountry==26.2.16
 
 # ── PDF Reports ───────────────────────────────────
 reportlab==4.2.5
