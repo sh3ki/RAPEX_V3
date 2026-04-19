@@ -1,6 +1,6 @@
 'use client';
 
-import { BriefcaseBusiness, Camera, CheckCircle2, FileText, Loader2, LogOut, MapPin, ShieldCheck, UserRound } from 'lucide-react';
+import { BriefcaseBusiness, Camera, CheckCircle2, FileText, Loader2, LogOut, MapPin, ShieldCheck, UserRound, X } from 'lucide-react';
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import api from '@/lib/api';
@@ -11,9 +11,11 @@ import {
   ConfirmPasswordInput,
   Dropdown,
   FileUpload,
+  ImageUpload,
   Input,
   MapPickerModal,
   MultiSelectDropdown,
+  OtpInput,
   PasswordInput,
   PhoneNumberInput,
   ProfileImageUpload,
@@ -42,8 +44,11 @@ interface CountryCodeOption {
 }
 
 interface DocumentItem {
+  id?: string;
   document_type: string;
   file_url: string;
+  preview_url?: string;
+  storage_path?: string;
   is_optional: boolean;
 }
 
@@ -84,6 +89,8 @@ interface OnboardingState {
   verification: {
     email_otp: string;
     phone_otp: string;
+    email_verified: boolean;
+    phone_verified: boolean;
     terms_accepted: boolean;
     privacy_accepted: boolean;
   };
@@ -97,13 +104,8 @@ interface OnboardingFieldErrors {
   verification: Partial<Record<'email_otp' | 'phone_otp' | 'terms_accepted' | 'privacy_accepted', string>>;
 }
 
-declare global {
-  interface Window {
-    FaceDetector?: any;
-  }
-}
-
 const STORAGE_KEY = 'merchant_onboarding_draft';
+const OTP_SENT_STORAGE_KEY = 'merchant_onboarding_otp_sent_channels';
 const MAP_PROVIDER = process.env.NEXT_PUBLIC_MAP_PROVIDER || 'leaflet';
 
 const DEFAULT_PHONE_COUNTRY: CountryCodeOption = {
@@ -156,6 +158,8 @@ const initialState: OnboardingState = {
   verification: {
     email_otp: '',
     phone_otp: '',
+    email_verified: false,
+    phone_verified: false,
     terms_accepted: false,
     privacy_accepted: false,
   },
@@ -177,14 +181,19 @@ const steps = [
   { id: 'verify', title: 'Verify & Submit', icon: <ShieldCheck size={15} /> },
 ];
 
+const DOCUMENT_MAX_SIZE_BYTES = 10 * 1024 * 1024;
+
 const documentMatrix: Record<RegistrationType, Array<{ type: string; label: string; required: boolean }>> = {
   UNREGISTERED: [
     { type: 'SELFIE_WITH_ID', label: 'Selfie with ID', required: true },
-    { type: 'VALID_ID', label: 'Valid ID', required: true },
+    { type: 'VALID_ID_FRONT', label: 'Valid ID (Front)', required: true },
+    { type: 'VALID_ID_BACK', label: 'Valid ID (Back)', required: true },
+    { type: 'OTHER', label: 'Other Documents', required: false },
   ],
   REGISTERED_NON_VAT: [
     { type: 'SELFIE_WITH_ID', label: 'Selfie with ID', required: true },
-    { type: 'VALID_ID', label: 'Valid ID', required: true },
+    { type: 'VALID_ID_FRONT', label: 'Valid ID (Front)', required: true },
+    { type: 'VALID_ID_BACK', label: 'Valid ID (Back)', required: true },
     { type: 'BARANGAY_PERMIT', label: 'Barangay Permit', required: true },
     { type: 'DTI_OR_SEC', label: 'DTI or SEC Certificate', required: true },
     { type: 'BIR_2303', label: 'BIR Form 2303', required: false },
@@ -193,7 +202,8 @@ const documentMatrix: Record<RegistrationType, Array<{ type: string; label: stri
   ],
   REGISTERED_VAT: [
     { type: 'SELFIE_WITH_ID', label: 'Selfie with ID', required: true },
-    { type: 'VALID_ID', label: 'Valid ID', required: true },
+    { type: 'VALID_ID_FRONT', label: 'Valid ID (Front)', required: true },
+    { type: 'VALID_ID_BACK', label: 'Valid ID (Back)', required: true },
     { type: 'BIR_2303', label: 'BIR Form 2303', required: true },
     { type: 'DTI_OR_SEC', label: 'DTI or SEC Certificate', required: true },
     { type: 'MAYORS_PERMIT', label: "Mayor's Permit", required: true },
@@ -267,6 +277,52 @@ async function dataUrlToFile(dataUrl: string, filename: string): Promise<File> {
   return new File([blob], filename, { type: blob.type || 'image/jpeg' });
 }
 
+function getApiOrigin() {
+  const apiBase = process.env.NEXT_PUBLIC_API_URL || '';
+  if (apiBase) {
+    try {
+      const fallbackOrigin = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000';
+      return new URL(apiBase, fallbackOrigin).origin;
+    } catch {
+      return 'http://localhost:8000';
+    }
+  }
+
+  return 'http://localhost:8000';
+}
+
+function resolveDocumentPreviewUrl(value: string) {
+  const raw = asSafeString(value).trim();
+  if (!raw) {
+    return '';
+  }
+
+  if (/^(data:|blob:|https?:\/\/)/i.test(raw)) {
+    return raw;
+  }
+
+  const normalized = raw.replace(/\\/g, '/').replace(/^\.\//, '').trim();
+  if (!normalized || /^[A-Za-z]:\//.test(normalized)) {
+    return '';
+  }
+
+  const apiOrigin = getApiOrigin();
+
+  if (normalized.startsWith('/media/')) {
+    return `${apiOrigin}${encodeURI(normalized)}`;
+  }
+
+  if (normalized.startsWith('media/')) {
+    return `${apiOrigin}/${encodeURI(normalized)}`;
+  }
+
+  if (normalized.startsWith('/')) {
+    return `${apiOrigin}${encodeURI(normalized)}`;
+  }
+
+  return `${apiOrigin}/media/${encodeURI(normalized)}`;
+}
+
 function Modal({ title, children, onClose }: { title: string; children: ReactNode; onClose: () => void }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-4">
@@ -283,64 +339,107 @@ function Modal({ title, children, onClose }: { title: string; children: ReactNod
   );
 }
 
-function SelfieCapture({
-  value,
-  onCapture,
+function SelfieCaptureModal({
+  open,
+  onSave,
+  onClose,
 }: {
-  value: string;
-  onCapture: (dataUrl: string, faceDetected: boolean) => void;
+  open: boolean;
+  onSave: (dataUrl: string) => void;
+  onClose: () => void;
 }) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const [faceDetected, setFaceDetected] = useState(false);
-  const [supportsFaceDetector, setSupportsFaceDetector] = useState(false);
-  const [faceBox, setFaceBox] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+
+  const [cameraDevices, setCameraDevices] = useState<MediaDeviceInfo[]>([]);
+  const [selectedCameraId, setSelectedCameraId] = useState('');
+  const [streamError, setStreamError] = useState('');
+  const [loadingStream, setLoadingStream] = useState(false);
+  const [videoReady, setVideoReady] = useState(false);
+  const [capturedDataUrl, setCapturedDataUrl] = useState('');
+
+  const stopStream = useCallback(() => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    }
+  }, []);
+
+  const startStream = useCallback(
+    async (cameraId?: string) => {
+      setLoadingStream(true);
+      setStreamError('');
+      setVideoReady(false);
+
+      try {
+        stopStream();
+
+        const constraints: MediaStreamConstraints = {
+          video: {
+            aspectRatio: 16 / 9,
+            ...(cameraId ? { deviceId: { exact: cameraId } } : {}),
+          },
+          audio: false,
+        };
+
+        const stream = await navigator.mediaDevices.getUserMedia(constraints);
+        streamRef.current = stream;
+
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          await videoRef.current.play();
+          setVideoReady(Boolean(videoRef.current.videoWidth && videoRef.current.videoHeight));
+        }
+
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const cameras = devices.filter((device) => device.kind === 'videoinput');
+        setCameraDevices(cameras);
+
+        if (!cameraId && cameras.length > 0) {
+          setSelectedCameraId(cameras[0].deviceId);
+        }
+      } catch {
+        setStreamError('Unable to access camera. Check browser permissions and try again.');
+      } finally {
+        setLoadingStream(false);
+      }
+    },
+    [stopStream],
+  );
 
   useEffect(() => {
-    let stream: MediaStream | null = null;
-    let timer: number | null = null;
+    if (!open) {
+      stopStream();
+      setCapturedDataUrl('');
+      setStreamError('');
+      setVideoReady(false);
+      return;
+    }
 
-    const boot = async () => {
-      stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-      }
-
-      if (window.FaceDetector) {
-        setSupportsFaceDetector(true);
-        const detector = new window.FaceDetector({ fastMode: true, maxDetectedFaces: 1 });
-        timer = window.setInterval(async () => {
-          if (!videoRef.current) {
-            return;
-          }
-          try {
-            const faces = await detector.detect(videoRef.current);
-            if (faces.length > 0) {
-              const box = faces[0].boundingBox;
-              setFaceDetected(true);
-              setFaceBox({ x: box.x, y: box.y, width: box.width, height: box.height });
-            } else {
-              setFaceDetected(false);
-              setFaceBox(null);
-            }
-          } catch {
-            setFaceDetected(false);
-          }
-        }, 900);
-      }
-    };
-
-    void boot();
+    void startStream();
 
     return () => {
-      if (timer) {
-        window.clearInterval(timer);
-      }
-      if (stream) {
-        stream.getTracks().forEach((track) => track.stop());
-      }
+      stopStream();
     };
-  }, []);
+  }, [open, startStream, stopStream]);
+
+  useEffect(() => {
+    if (!open || capturedDataUrl || !videoRef.current || !streamRef.current) {
+      return;
+    }
+
+    const video = videoRef.current;
+    if (video.srcObject !== streamRef.current) {
+      video.srcObject = streamRef.current;
+    }
+
+    void video.play().then(() => {
+      setVideoReady(Boolean(video.videoWidth && video.videoHeight));
+    }).catch(() => {
+      setVideoReady(false);
+    });
+  }, [capturedDataUrl, open]);
 
   const capture = () => {
     if (!videoRef.current || !canvasRef.current) {
@@ -349,51 +448,131 @@ function SelfieCapture({
 
     const video = videoRef.current;
     const canvas = canvasRef.current;
+
+    if (video.paused) {
+      void video.play();
+    }
+
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
 
-    const ctx = canvas.getContext('2d');
-    if (!ctx) {
+    const context = canvas.getContext('2d');
+    if (!context) {
       return;
     }
 
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-    const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
-    onCapture(dataUrl, supportsFaceDetector ? faceDetected : true);
+    if (!video.videoWidth || !video.videoHeight) {
+      setStreamError('Camera frame is not ready yet. Please wait and try again.');
+      return;
+    }
+
+    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+    setCapturedDataUrl(canvas.toDataURL('image/jpeg', 0.92));
+    setStreamError('');
   };
 
+  if (!open) {
+    return null;
+  }
+
   return (
-    <div className="space-y-3">
-      <div className="relative w-full overflow-hidden rounded-xl border border-slate-300 bg-black">
-        <video ref={videoRef} autoPlay playsInline muted className="h-[280px] w-full object-cover" />
-        {faceBox ? (
-          <div
-            className="absolute border-2 border-emerald-400"
-            style={{
-              left: `${(faceBox.x / (videoRef.current?.videoWidth || 1)) * 100}%`,
-              top: `${(faceBox.y / (videoRef.current?.videoHeight || 1)) * 100}%`,
-              width: `${(faceBox.width / (videoRef.current?.videoWidth || 1)) * 100}%`,
-              height: `${(faceBox.height / (videoRef.current?.videoHeight || 1)) * 100}%`,
-            }}
-          />
-        ) : null}
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 p-4">
+      <div className="w-full max-w-4xl rounded-2xl border border-slate-200 bg-white shadow-2xl shadow-slate-950/20">
+        <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
+          <h3 className="font-semibold text-slate-900">Capture Selfie with ID</h3>
+          <Button type="button" variant="ghost" size="sm" onClick={onClose}>
+            Close
+          </Button>
+        </div>
+
+        <div className="space-y-4 p-4">
+          <div className="grid gap-4 md:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-600">Camera</label>
+              <select
+                value={selectedCameraId}
+                onChange={(event) => {
+                  const nextId = event.target.value;
+                  setSelectedCameraId(nextId);
+                  void startStream(nextId);
+                }}
+                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-200"
+              >
+                {cameraDevices.length === 0 ? (
+                  <option value="">Default Camera</option>
+                ) : (
+                  cameraDevices.map((device, index) => (
+                    <option key={device.deviceId || index} value={device.deviceId}>
+                      {device.label || `Camera ${index + 1}`}
+                    </option>
+                  ))
+                )}
+              </select>
+            </div>
+
+            <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">Capture Guide</p>
+              <p className="mt-1 text-sm text-slate-700">Keep your face and ID in frame, then capture.</p>
+            </div>
+          </div>
+
+          <div className="relative overflow-hidden rounded-xl border border-slate-300 bg-black">
+            {capturedDataUrl ? (
+              <img src={capturedDataUrl} alt="Captured selfie with ID" className="aspect-video w-full object-cover" />
+            ) : (
+              <video
+                ref={videoRef}
+                autoPlay
+                playsInline
+                muted
+                onLoadedMetadata={() => setVideoReady(true)}
+                onCanPlay={() => setVideoReady(true)}
+                className="aspect-video w-full object-cover"
+              />
+            )}
+          </div>
+
+          {streamError ? <p className="text-xs font-medium text-red-600">{streamError}</p> : null}
+          {loadingStream ? <p className="text-xs text-slate-500">Starting camera...</p> : null}
+          {!loadingStream && !capturedDataUrl && !videoReady && !streamError ? (
+            <p className="text-xs text-slate-500">Preparing camera frame...</p>
+          ) : null}
+
+          <div className="flex flex-wrap items-center gap-2">
+            {!capturedDataUrl ? (
+              <Button type="button" onClick={capture} disabled={loadingStream || !videoReady || Boolean(streamError)}>
+                <Camera size={16} />
+                Capture
+              </Button>
+            ) : (
+              <>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => {
+                    setCapturedDataUrl('');
+                    setStreamError('');
+                    setVideoReady(Boolean(videoRef.current?.videoWidth && videoRef.current?.videoHeight));
+                  }}
+                >
+                  Recapture
+                </Button>
+                <Button
+                  type="button"
+                  onClick={() => {
+                    onSave(capturedDataUrl);
+                    onClose();
+                  }}
+                >
+                  Save Selfie
+                </Button>
+              </>
+            )}
+          </div>
+        </div>
+
+        <canvas ref={canvasRef} className="hidden" />
       </div>
-
-      <p className="text-xs text-slate-500">
-        {supportsFaceDetector
-          ? faceDetected
-            ? 'Face detected. Capture is enabled.'
-            : 'No face detected yet. Center your face and ID in frame.'
-          : 'Face detection is not supported in this browser. Capture-only fallback is active.'}
-      </p>
-
-      <Button type="button" onClick={capture}>
-        <Camera size={16} />
-        Capture Selfie with ID
-      </Button>
-
-      {value ? <img src={value} alt="Selfie with ID" className="h-40 rounded-xl border border-slate-300 object-cover" /> : null}
-      <canvas ref={canvasRef} className="hidden" />
     </div>
   );
 }
@@ -416,9 +595,15 @@ export default function MerchantOnboardingPage() {
   const [showMap, setShowMap] = useState(false);
   const [showTermsModal, setShowTermsModal] = useState(false);
   const [showPrivacyModal, setShowPrivacyModal] = useState(false);
+  const [showSelfieCaptureModal, setShowSelfieCaptureModal] = useState(false);
   const [showSubmitConfirm, setShowSubmitConfirm] = useState(false);
-  const [selfieFaceValid, setSelfieFaceValid] = useState(false);
   const [uploadingDocTypes, setUploadingDocTypes] = useState<string[]>([]);
+  const [otpSendingChannel, setOtpSendingChannel] = useState<'EMAIL' | 'PHONE' | null>(null);
+  const [otpVerifyingChannel, setOtpVerifyingChannel] = useState<'EMAIL' | 'PHONE' | null>(null);
+  const [otpSentChannels, setOtpSentChannels] = useState<{ EMAIL: boolean; PHONE: boolean }>({
+    EMAIL: false,
+    PHONE: false,
+  });
   const [profileImageUploading, setProfileImageUploading] = useState(false);
   const [hasHydrated, setHasHydrated] = useState(false);
   const [profileImagePreviewUrl, setProfileImagePreviewUrl] = useState('');
@@ -426,6 +611,7 @@ export default function MerchantOnboardingPage() {
   const [documentPickerFiles, setDocumentPickerFiles] = useState<Record<string, File[]>>({});
   const [phoneCountryCode, setPhoneCountryCode] = useState(DEFAULT_PHONE_COUNTRY.country_code);
   const [phoneLocalNumber, setPhoneLocalNumber] = useState('');
+  const [hasSavedPassword, setHasSavedPassword] = useState(false);
   const [termsText, setTermsText] = useState('Loading terms...');
   const [privacyText, setPrivacyText] = useState('Loading privacy...');
   const passwordSnapshotRef = useRef({ password: '', confirmPassword: '' });
@@ -545,6 +731,13 @@ export default function MerchantOnboardingPage() {
   }, []);
 
   useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+    window.sessionStorage.setItem(OTP_SENT_STORAGE_KEY, JSON.stringify(otpSentChannels));
+  }, [otpSentChannels]);
+
+  useEffect(() => {
     if (!user) {
       router.replace('/login');
       return;
@@ -557,6 +750,21 @@ export default function MerchantOnboardingPage() {
 
     const bootstrap = async () => {
       try {
+        if (typeof window !== 'undefined') {
+          const otpSentRaw = window.sessionStorage.getItem(OTP_SENT_STORAGE_KEY);
+          if (otpSentRaw) {
+            try {
+              const parsedOtpSent = JSON.parse(otpSentRaw) as { EMAIL?: boolean; PHONE?: boolean };
+              setOtpSentChannels({
+                EMAIL: Boolean(parsedOtpSent.EMAIL),
+                PHONE: Boolean(parsedOtpSent.PHONE),
+              });
+            } catch {
+              setOtpSentChannels({ EMAIL: false, PHONE: false });
+            }
+          }
+        }
+
         let sessionState: OnboardingState | null = null;
         const sessionRaw = typeof window !== 'undefined' ? window.sessionStorage.getItem(STORAGE_KEY) : null;
         if (sessionRaw) {
@@ -583,12 +791,19 @@ export default function MerchantOnboardingPage() {
 
         const stateResp = await api.get('/merchant/onboarding/state/');
         const payload = stateResp.data;
-        const existingDocuments = (payload.documents || []).map((item: any) => ({
-          document_type: item.document_type,
-          file_url: item.storage_path || item.file_url,
-          is_optional: item.is_optional,
-        }));
-        const selfieDocument = (payload.documents || []).find((item: any) => item.document_type === 'SELFIE_WITH_ID');
+        const existingDocuments = (payload.documents || []).map((item: any) => {
+          const storagePath = asSafeString(item.storage_path || item.file_url);
+          const previewUrl = resolveDocumentPreviewUrl(asSafeString(item.file_url || item.storage_path));
+          return {
+            id: asSafeString(item.id),
+            document_type: item.document_type,
+            file_url: storagePath,
+            storage_path: storagePath,
+            preview_url: previewUrl || storagePath,
+            is_optional: Boolean(item.is_optional),
+          } as DocumentItem;
+        });
+        const selfieDocument = existingDocuments.find((item: DocumentItem) => item.document_type === 'SELFIE_WITH_ID');
 
         patchState({
           profile: {
@@ -623,15 +838,24 @@ export default function MerchantOnboardingPage() {
               }
             : initialState.location,
           documents: {
-            selfie_with_id: selfieDocument?.file_url || '',
+            selfie_with_id: selfieDocument?.preview_url || '',
             items: existingDocuments,
           },
           verification: {
             ...initialState.verification,
+            email_verified: Boolean(payload.state?.email_verified),
+            phone_verified: Boolean(payload.state?.phone_verified),
             terms_accepted: payload.state?.terms_accepted || false,
             privacy_accepted: payload.state?.privacy_accepted || false,
           },
         });
+
+        setOtpSentChannels((prev) => ({
+          EMAIL: prev.EMAIL || Boolean(payload.state?.email_verified),
+          PHONE: prev.PHONE || Boolean(payload.state?.phone_verified),
+        }));
+
+        setHasSavedPassword(Boolean(payload.profile?.has_saved_password));
 
         setProfileImagePreviewUrl(payload.profile?.profile_image_url || '');
 
@@ -773,23 +997,51 @@ export default function MerchantOnboardingPage() {
     void fetchLegal();
   }, []);
 
-  const upsertDocument = useCallback((documentType: string, fileUrl: string, isOptional: boolean) => {
+  const setDocumentItems = useCallback((itemsOrUpdater: DocumentItem[] | ((previous: DocumentItem[]) => DocumentItem[])) => {
     setFormState((prev) => {
-      const next = [...prev.documents.items.filter((item) => item.document_type !== documentType)];
-      next.push({ document_type: documentType, file_url: fileUrl, is_optional: isOptional });
+      const nextItems =
+        typeof itemsOrUpdater === 'function'
+          ? (itemsOrUpdater as (previous: DocumentItem[]) => DocumentItem[])(prev.documents.items)
+          : itemsOrUpdater;
+
       const merged = {
         ...prev,
         documents: {
           ...prev.documents,
-          items: next,
+          items: nextItems,
         },
       };
+
       if (typeof window !== 'undefined') {
         window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
       }
       return merged;
     });
   }, []);
+
+  const validateDocumentFile = useCallback(
+    (file: File, label: string, imageOnly = false) => {
+      if (file.size > DOCUMENT_MAX_SIZE_BYTES) {
+        showErrorToast(`${label} exceeds 10MB size limit.`, 'Upload Failed');
+        return false;
+      }
+
+      const allowedCommonTypes = new Set(['image/jpeg', 'image/png', 'image/webp', 'application/pdf']);
+
+      if (imageOnly && !file.type.startsWith('image/')) {
+        showErrorToast(`${label} must be an image file.`, 'Upload Failed');
+        return false;
+      }
+
+      if (!allowedCommonTypes.has(file.type)) {
+        showErrorToast(`${label} has an unsupported file type.`, 'Upload Failed');
+        return false;
+      }
+
+      return true;
+    },
+    [showErrorToast],
+  );
 
   const markDocumentUpload = useCallback((documentType: string, uploading: boolean) => {
     setUploadingDocTypes((prev) => {
@@ -800,8 +1052,8 @@ export default function MerchantOnboardingPage() {
     });
   }, []);
 
-  const uploadDocument = useCallback(
-    async (documentType: string, file: File, isOptional: boolean) => {
+  const uploadDocumentFile = useCallback(
+    async (documentType: string, file: File): Promise<{ fileUrl: string; storagePath: string }> => {
       markDocumentUpload(documentType, true);
       try {
         const formData = new FormData();
@@ -816,18 +1068,14 @@ export default function MerchantOnboardingPage() {
         if (!uploadedUrl || !storagePath) {
           throw new Error('Upload response missing file URL.');
         }
-
-        upsertDocument(documentType, storagePath, isOptional);
-        if (documentType === 'SELFIE_WITH_ID') {
-          patchNested('documents', { selfie_with_id: uploadedUrl });
-        }
+        return { fileUrl: uploadedUrl, storagePath };
       } catch (err: any) {
-        showErrorToast(err?.response?.data?.message || 'Unable to upload document.', 'Upload Failed');
+        throw new Error(err?.response?.data?.message || 'Unable to upload document.');
       } finally {
         markDocumentUpload(documentType, false);
       }
     },
-    [markDocumentUpload, patchNested, showErrorToast, upsertDocument],
+    [markDocumentUpload],
   );
 
   const uploadProfileImage = useCallback(
@@ -885,6 +1133,9 @@ export default function MerchantOnboardingPage() {
 
     if (currentStep === 0) {
       const p = formState.profile;
+      const hasPasswordInput = Boolean(asSafeString(p.password).trim());
+      const hasConfirmInput = Boolean(asSafeString(p.confirm_password).trim());
+      const requiresNewPassword = !hasSavedPassword;
 
       if (!asSafeString(p.first_name).trim()) {
         nextErrors.profile.first_name = 'First name is required.';
@@ -901,16 +1152,24 @@ export default function MerchantOnboardingPage() {
       if (!asSafeString(p.phone_number).trim()) {
         nextErrors.profile.phone_number = 'Phone number is required.';
       }
-      if (!asSafeString(p.password).trim()) {
+      if (requiresNewPassword && !hasPasswordInput) {
         nextErrors.profile.password = 'Password is required.';
       }
-      if (!asSafeString(p.confirm_password).trim()) {
+      if (requiresNewPassword && !hasConfirmInput) {
         nextErrors.profile.confirm_password = 'Confirm password is required.';
       }
-      if (p.password && !isStrongPassword(p.password)) {
+      if ((hasPasswordInput || hasConfirmInput) && (!hasPasswordInput || !hasConfirmInput)) {
+        if (!hasPasswordInput) {
+          nextErrors.profile.password = 'Password is required when updating password.';
+        }
+        if (!hasConfirmInput) {
+          nextErrors.profile.confirm_password = 'Confirm password is required when updating password.';
+        }
+      }
+      if (hasPasswordInput && !isStrongPassword(p.password)) {
         nextErrors.profile.password = 'Use 8+ chars with uppercase, lowercase, number, and special character.';
       }
-      if (p.password && p.confirm_password && p.password !== p.confirm_password) {
+      if (hasPasswordInput && hasConfirmInput && p.password !== p.confirm_password) {
         nextErrors.profile.confirm_password = 'Passwords do not match.';
       }
       if (usernameAvailability === 'taken') {
@@ -999,34 +1258,54 @@ export default function MerchantOnboardingPage() {
         nextErrors.documents.selfie_with_id = 'Selfie with ID is required.';
         return { message: 'Selfie with ID capture is required.', errors: nextErrors };
       }
-      const selfieCapturedThisSession = formState.documents.selfie_with_id.startsWith('data:image/');
-      if (selfieCapturedThisSession && !selfieFaceValid && typeof window !== 'undefined' && !!window.FaceDetector) {
-        return { message: 'Face must be clearly detected before selfie capture.', errors: nextErrors };
-      }
+
+      const hasExistingType = (documentType: string) =>
+        formState.documents.items.some((item) => item.document_type === documentType);
+
+      const hasRequiredDocument = (documentType: string) => {
+        if (documentType === 'SELFIE_WITH_ID') {
+          return Boolean(formState.documents.selfie_with_id);
+        }
+
+        if (documentType === 'VALID_ID_FRONT') {
+          return Boolean((documentPickerFiles.VALID_ID_FRONT || [])[0]) || hasExistingType('VALID_ID_FRONT');
+        }
+
+        if (documentType === 'VALID_ID_BACK') {
+          return Boolean((documentPickerFiles.VALID_ID_BACK || [])[0]) || hasExistingType('VALID_ID_BACK');
+        }
+
+        if (documentType === 'OTHER') {
+          return true;
+        }
+
+        return Boolean((documentPickerFiles[documentType] || [])[0]) || hasExistingType(documentType);
+      };
 
       const required = stepDocuments.filter((item) => item.required).map((item) => item.type);
-      const submitted = new Set(formState.documents.items.map((item) => item.document_type));
       for (const docType of required) {
-        if (!submitted.has(docType)) {
+        if (!hasRequiredDocument(docType)) {
           return { message: `Required document missing: ${docType}`, errors: nextErrors };
         }
+      }
+
+      const otherFiles = documentPickerFiles.OTHER || [];
+      if (otherFiles.length > 3) {
+        return { message: 'Other Documents accepts up to 3 files only.', errors: nextErrors };
       }
     }
 
     if (currentStep === 4) {
       const v = formState.verification;
 
-      if (!asSafeString(v.email_otp).trim()) {
-        nextErrors.verification.email_otp = 'Email OTP is required.';
+      if (!v.email_verified) {
+        nextErrors.verification.email_otp = 'Please verify your email OTP.';
       }
-      if (!asSafeString(v.phone_otp).trim()) {
-        nextErrors.verification.phone_otp = 'Phone OTP is required.';
+      if (!v.phone_verified) {
+        nextErrors.verification.phone_otp = 'Please verify your phone OTP.';
       }
-      if (!v.terms_accepted) {
-        nextErrors.verification.terms_accepted = 'You must accept Terms and Conditions.';
-      }
-      if (!v.privacy_accepted) {
-        nextErrors.verification.privacy_accepted = 'You must accept the Privacy Policy.';
+      if (!v.terms_accepted || !v.privacy_accepted) {
+        nextErrors.verification.terms_accepted = 'You must agree to the Privacy Policy and Terms & Conditions.';
       }
 
       if (Object.keys(nextErrors.verification).length > 0) {
@@ -1044,7 +1323,11 @@ export default function MerchantOnboardingPage() {
       if (uploadedPath) {
         profilePayload.profile_image_url = uploadedPath;
       }
-      await api.post('/merchant/onboarding/step/profile/', profilePayload);
+      const response = await api.post('/merchant/onboarding/step/profile/', profilePayload);
+      patchNested('verification', {
+        email_verified: Boolean(response.data?.email_verified),
+        phone_verified: Boolean(response.data?.phone_verified),
+      });
     }
     if (currentStep === 1) {
       await api.post('/merchant/onboarding/step/business/', formState.business);
@@ -1071,9 +1354,100 @@ export default function MerchantOnboardingPage() {
       }
     }
     if (currentStep === 3) {
+      const requiredTypes = new Set(stepDocuments.filter((item) => item.required).map((item) => item.type));
+      const documentLabels = new Map(stepDocuments.map((item) => [item.type, item.label]));
+      const existingByType = formState.documents.items.reduce<Record<string, DocumentItem[]>>((acc, item) => {
+        if (!acc[item.document_type]) {
+          acc[item.document_type] = [];
+        }
+        acc[item.document_type].push(item);
+        return acc;
+      }, {});
+
+      const nextItems: DocumentItem[] = [];
+
+      const addDocument = (documentType: string, fileUrl: string, previewUrl?: string) => {
+        nextItems.push({
+          document_type: documentType,
+          file_url: fileUrl,
+          preview_url: previewUrl || resolveDocumentPreviewUrl(fileUrl) || fileUrl,
+          is_optional: !requiredTypes.has(documentType),
+        });
+      };
+
+      const uploadOrReuseSingle = async (documentType: string, file: File | undefined, imageOnly = false) => {
+        const label = documentLabels.get(documentType) || documentType;
+
+        if (file) {
+          if (!validateDocumentFile(file, label, imageOnly)) {
+            throw new Error(`Invalid file selected for ${label}.`);
+          }
+
+          const uploaded = await uploadDocumentFile(documentType, file);
+          addDocument(documentType, uploaded.storagePath, uploaded.fileUrl);
+
+          if (documentType === 'SELFIE_WITH_ID') {
+            patchNested('documents', { selfie_with_id: uploaded.fileUrl });
+          }
+          return;
+        }
+
+        const existing = (existingByType[documentType] || [])[0];
+        if (existing) {
+          addDocument(documentType, existing.file_url, existing.preview_url || existing.file_url);
+        }
+      };
+
+      const selfieValue = formState.documents.selfie_with_id;
+      if (selfieValue.startsWith('data:image/')) {
+        const selfieFile = await dataUrlToFile(selfieValue, 'selfie-with-id.jpg');
+        await uploadOrReuseSingle('SELFIE_WITH_ID', selfieFile, true);
+      } else {
+        await uploadOrReuseSingle('SELFIE_WITH_ID', undefined, true);
+      }
+
+      const validIdFrontFile = (documentPickerFiles.VALID_ID_FRONT || [])[0];
+      const validIdBackFile = (documentPickerFiles.VALID_ID_BACK || [])[0];
+      await uploadOrReuseSingle('VALID_ID_FRONT', validIdFrontFile, true);
+      await uploadOrReuseSingle('VALID_ID_BACK', validIdBackFile, true);
+
+      for (const item of stepDocuments) {
+        if (item.type === 'SELFIE_WITH_ID' || item.type === 'VALID_ID_FRONT' || item.type === 'VALID_ID_BACK' || item.type === 'OTHER') {
+          continue;
+        }
+
+        const stagedFile = (documentPickerFiles[item.type] || [])[0];
+        await uploadOrReuseSingle(item.type, stagedFile, false);
+      }
+
+      const stagedOtherFiles = documentPickerFiles.OTHER || [];
+      if (stagedOtherFiles.length > 0) {
+        for (const otherFile of stagedOtherFiles.slice(0, 3)) {
+          if (!validateDocumentFile(otherFile, 'Other Documents', false)) {
+            throw new Error('Invalid file selected for Other Documents.');
+          }
+
+          const uploaded = await uploadDocumentFile('OTHER', otherFile);
+          addDocument('OTHER', uploaded.storagePath, uploaded.fileUrl);
+        }
+      } else {
+        for (const existingOther of existingByType.OTHER || []) {
+          addDocument('OTHER', existingOther.file_url, existingOther.preview_url || existingOther.file_url);
+        }
+      }
+
+      setDocumentItems(nextItems);
+      const documentsPayload = nextItems.map((item) => ({
+        document_type: item.document_type,
+        file_url: item.file_url,
+        is_optional: item.is_optional,
+      }));
+
       await api.post('/merchant/onboarding/step/documents/', {
-        documents: formState.documents.items,
+        documents: documentsPayload,
       });
+
+      setDocumentPickerFiles({});
     }
   };
 
@@ -1176,18 +1550,62 @@ export default function MerchantOnboardingPage() {
     }
   };
 
-  const requestVerificationOtp = async () => {
+  const requestVerificationOtp = async (channel: 'EMAIL' | 'PHONE') => {
     if (uploadingDocTypes.length > 0) {
       showErrorToast('Please wait for document uploads to finish before requesting OTP.');
       return;
     }
 
+    setOtpSendingChannel(channel);
     try {
       await saveCurrentStep();
-      await api.post('/merchant/onboarding/send-otp/');
-      showSuccessToast('Verification OTP sent to your email and phone.', 'OTP Sent');
+      await api.post('/merchant/onboarding/send-otp/', { channel });
+      setOtpSentChannels((previous) => ({ ...previous, [channel]: true }));
+      showSuccessToast(channel === 'EMAIL' ? 'Verification OTP sent to your email.' : 'Verification OTP sent to your phone.', 'OTP Sent');
     } catch (err: any) {
       showErrorToast(err?.response?.data?.message || 'Unable to send OTP.', 'OTP Failed');
+    } finally {
+      setOtpSendingChannel(null);
+    }
+  };
+
+  const verifyVerificationOtp = async (channel: 'EMAIL' | 'PHONE') => {
+    const otpValue = channel === 'EMAIL' ? formState.verification.email_otp : formState.verification.phone_otp;
+    const normalizedOtp = asSafeString(otpValue).trim();
+
+    if (normalizedOtp.length !== 6) {
+      if (channel === 'EMAIL') {
+        setFieldErrors((prev) => ({
+          ...prev,
+          verification: { ...prev.verification, email_otp: 'Enter the 6-digit email OTP before verifying.' },
+        }));
+      } else {
+        setFieldErrors((prev) => ({
+          ...prev,
+          verification: { ...prev.verification, phone_otp: 'Enter the 6-digit phone OTP before verifying.' },
+        }));
+      }
+      return;
+    }
+
+    setOtpVerifyingChannel(channel);
+    try {
+      const response = await api.post('/merchant/onboarding/verify-otp/', {
+        channel,
+        otp_code: normalizedOtp,
+      });
+
+      patchNested('verification', {
+        email_verified: Boolean(response.data?.email_verified),
+        phone_verified: Boolean(response.data?.phone_verified),
+      });
+
+      clearFieldError('verification', channel === 'EMAIL' ? 'email_otp' : 'phone_otp');
+      showSuccessToast(channel === 'EMAIL' ? 'Email OTP verified successfully.' : 'Phone OTP verified successfully.', 'OTP Verified');
+    } catch (err: any) {
+      showErrorToast(err?.response?.data?.message || 'Unable to verify OTP.', 'OTP Verification Failed');
+    } finally {
+      setOtpVerifyingChannel(null);
     }
   };
 
@@ -1206,6 +1624,8 @@ export default function MerchantOnboardingPage() {
             file={profileImageFile}
             initials={initials}
             remoteImageUrl={profileImagePreviewUrl || formState.profile.profile_image_url}
+            maxSizeMB={5}
+            onValidationError={(message) => showErrorToast(message, 'Upload Failed')}
             onFileChange={(file) => {
               if (!file) {
                 setProfileImageFile(null);
@@ -1307,15 +1727,23 @@ export default function MerchantOnboardingPage() {
 
         <div className="md:col-span-2 grid gap-4 md:grid-cols-2">
           <PasswordInput
+            label={hasSavedPassword ? 'Password (optional)' : 'Password *'}
             value={formState.profile.password}
             onChange={(value) => {
               patchNested('profile', { password: value });
               clearFieldError('profile', 'password');
             }}
-            hint={passwordStrong ? 'Password meets all complexity requirements.' : undefined}
+            hint={
+              hasSavedPassword && !formState.profile.password
+                ? 'Leave blank to keep your saved password.'
+                : passwordStrong
+                ? 'Password meets all complexity requirements.'
+                : undefined
+            }
             error={fieldErrors.profile.password}
           />
           <ConfirmPasswordInput
+            label={hasSavedPassword ? 'Confirm Password (optional)' : 'Confirm Password *'}
             password={formState.profile.password}
             confirmPassword={formState.profile.confirm_password}
             onChange={(value) => {
@@ -1465,151 +1893,527 @@ export default function MerchantOnboardingPage() {
     </div>
   );
 
-  const renderDocumentsStep = () => (
-    <div className="space-y-4">
-      <div className={fieldErrors.documents.selfie_with_id ? 'rounded-xl border border-red-300 bg-red-50/40 p-4 shadow-sm' : 'rounded-xl border border-slate-200 bg-white p-4 shadow-sm'}>
-        <h4 className="mb-2 font-semibold text-slate-900">Selfie with ID *</h4>
-        <SelfieCapture
-          value={formState.documents.selfie_with_id}
-          onCapture={(dataUrl, detected) => {
-            setSelfieFaceValid(detected);
-            patchNested('documents', { selfie_with_id: dataUrl });
-            clearFieldError('documents', 'selfie_with_id');
-            void (async () => {
-              try {
-                const selfieFile = await dataUrlToFile(dataUrl, 'selfie-with-id.jpg');
-                await uploadDocument('SELFIE_WITH_ID', selfieFile, false);
-              } catch {
-                showErrorToast('Failed to process selfie capture for upload.', 'Upload Failed');
-              }
-            })();
-          }}
-        />
-        {fieldErrors.documents.selfie_with_id ? <p className="mt-2 text-xs font-medium text-red-600">{fieldErrors.documents.selfie_with_id}</p> : null}
-        {uploadingDocTypes.includes('SELFIE_WITH_ID') ? (
-          <p className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-primary-700">
-            <Loader2 size={12} className="animate-spin" />
-            Uploading selfie with ID...
-          </p>
-        ) : null}
-      </div>
+  const renderDocumentsStep = () => {
+    const existingByType = formState.documents.items.reduce<Record<string, DocumentItem[]>>((acc, entry) => {
+      if (!acc[entry.document_type]) {
+        acc[entry.document_type] = [];
+      }
+      acc[entry.document_type].push(entry);
+      return acc;
+    }, {});
 
-      <div className="space-y-3">
-        {stepDocuments
-          .filter((item) => item.type !== 'SELFIE_WITH_ID')
-          .map((item) => {
-            const existing = formState.documents.items.find((entry) => entry.document_type === item.type);
-            return (
-              <div key={item.type} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-                <FileUpload
-                  label={`${item.label} ${item.required ? '*' : '(Optional)'}`}
-                  files={documentPickerFiles[item.type] || []}
-                  multiple={false}
-                  accept=".jpg,.jpeg,.png,.webp,.pdf"
-                  onFilesChange={(files) => {
-                    const selected = files.slice(0, 1);
-                    setDocumentPickerFiles((prev) => ({ ...prev, [item.type]: selected }));
+    const removeSavedDocument = (documentType: string, target?: DocumentItem) => {
+      setDocumentItems((previous) =>
+        previous.filter((item) => {
+          if (item.document_type !== documentType) {
+            return true;
+          }
 
-                    const file = selected[0];
-                    if (!file) {
-                      return;
+          if (!target) {
+            return false;
+          }
+
+          return item.file_url !== target.file_url;
+        }),
+      );
+
+      if (documentType === 'SELFIE_WITH_ID') {
+        patchNested('documents', { selfie_with_id: '' });
+      }
+    };
+
+    const getPreviewUrl = (item?: DocumentItem) => {
+      if (!item) {
+        return '';
+      }
+      return resolveDocumentPreviewUrl(item.preview_url || item.file_url || item.storage_path || '');
+    };
+
+    const selfieStored = (existingByType.SELFIE_WITH_ID || [])[0];
+    const selfiePreview = resolveDocumentPreviewUrl(formState.documents.selfie_with_id) || getPreviewUrl(selfieStored);
+
+    return (
+      <div className="space-y-4">
+        <div className="rounded-xl border border-primary-200 bg-primary-50/40 p-3 text-xs font-medium text-primary-800">
+          Upload required Documents based on your Business Registration Type.
+        </div>
+
+        <div className={fieldErrors.documents.selfie_with_id ? 'rounded-xl border border-red-300 bg-red-50/40 p-4 shadow-sm' : 'rounded-xl border border-slate-200 bg-white p-4 shadow-sm'}>
+          <h4 className="mb-2 font-semibold text-slate-900">Selfie with ID *</h4>
+          <p className="mb-3 text-xs text-slate-600">Open camera modal, capture, then save.</p>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <Button type="button" onClick={() => setShowSelfieCaptureModal(true)}>
+              <Camera size={16} />
+              {formState.documents.selfie_with_id ? 'Recapture Selfie with ID' : 'Capture Selfie with ID'}
+            </Button>
+          </div>
+
+          {selfiePreview ? (
+            <div className="mt-3 w-full max-w-xs">
+              <div className="relative overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
+                <img src={selfiePreview} alt="Selfie with ID preview" className="h-36 w-full object-cover" />
+                <button
+                  type="button"
+                  className="absolute right-2 top-2 rounded-full border border-white/70 bg-black/60 p-1 text-white transition hover:bg-black/80"
+                  onClick={() => {
+                    patchNested('documents', { selfie_with_id: '' });
+                    if (selfieStored) {
+                      removeSavedDocument('SELFIE_WITH_ID', selfieStored);
                     }
-
-                    const maxSize = 5 * 1024 * 1024;
-                    if (file.size > maxSize) {
-                      showErrorToast(`${item.label} exceeds 5MB size limit.`, 'Upload Failed');
-                      return;
-                    }
-                    void uploadDocument(item.type, file, !item.required);
                   }}
-                />
+                  aria-label="Remove selfie with ID"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+            </div>
+          ) : null}
 
-                <p className="mt-2 text-xs text-slate-500">
-                  {existing ? `Uploaded: ${existing.file_url}` : 'No file uploaded yet.'}
-                </p>
-                {uploadingDocTypes.includes(item.type) ? (
-                  <p className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-primary-700">
-                    <Loader2 size={12} className="animate-spin" />
-                    Uploading...
+          {fieldErrors.documents.selfie_with_id ? <p className="mt-2 text-xs font-medium text-red-600">{fieldErrors.documents.selfie_with_id}</p> : null}
+        </div>
+
+        <div className="space-y-3">
+          {stepDocuments
+            .filter((item) => item.type !== 'SELFIE_WITH_ID')
+            .map((item) => {
+              if (item.type === 'VALID_ID_FRONT') {
+                const existingFrontItem = (existingByType.VALID_ID_FRONT || [])[0];
+                const existingBackItem = (existingByType.VALID_ID_BACK || [])[0];
+                const existingFront = getPreviewUrl(existingFrontItem);
+                const existingBack = getPreviewUrl(existingBackItem);
+                const stagedFront = documentPickerFiles.VALID_ID_FRONT || [];
+                const stagedBack = documentPickerFiles.VALID_ID_BACK || [];
+
+                return (
+                  <div key="VALID_ID_INLINE" className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <div className="space-y-2">
+                        <ImageUpload
+                          label="Valid ID Front *"
+                          files={stagedFront}
+                          multiple={false}
+                          maxFiles={1}
+                          helperText="PNG, JPEG, and WEBP are supported. Keep text readable and edges visible."
+                          previewAspect="landscape"
+                          previewFit="contain"
+                          onFilesChange={(files) => {
+                            const selected = files.slice(0, 1);
+                            const candidate = selected[0];
+
+                            if (candidate && !validateDocumentFile(candidate, 'Valid ID Front', true)) {
+                              return;
+                            }
+
+                            setDocumentPickerFiles((prev) => ({ ...prev, VALID_ID_FRONT: selected }));
+                          }}
+                        />
+                        {!stagedFront.length && existingFront ? (
+                          <div className="relative overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
+                            <img src={existingFront} alt="Saved valid ID front" className="aspect-video w-full bg-slate-100 object-contain" />
+                            <button
+                              type="button"
+                              className="absolute right-2 top-2 rounded-full border border-white/70 bg-black/60 p-1 text-white transition hover:bg-black/80"
+                              onClick={() => removeSavedDocument('VALID_ID_FRONT', existingFrontItem)}
+                              aria-label="Remove valid ID front"
+                            >
+                              <X size={14} />
+                            </button>
+                          </div>
+                        ) : null}
+                      </div>
+
+                      <div className="space-y-2">
+                        <ImageUpload
+                          label="Valid ID Back *"
+                          files={stagedBack}
+                          multiple={false}
+                          maxFiles={1}
+                          helperText="PNG, JPEG, and WEBP are supported. Keep text readable and edges visible."
+                          previewAspect="landscape"
+                          previewFit="contain"
+                          onFilesChange={(files) => {
+                            const selected = files.slice(0, 1);
+                            const candidate = selected[0];
+
+                            if (candidate && !validateDocumentFile(candidate, 'Valid ID Back', true)) {
+                              return;
+                            }
+
+                            setDocumentPickerFiles((prev) => ({ ...prev, VALID_ID_BACK: selected }));
+                          }}
+                        />
+                        {!stagedBack.length && existingBack ? (
+                          <div className="relative overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
+                            <img src={existingBack} alt="Saved valid ID back" className="aspect-video w-full bg-slate-100 object-contain" />
+                            <button
+                              type="button"
+                              className="absolute right-2 top-2 rounded-full border border-white/70 bg-black/60 p-1 text-white transition hover:bg-black/80"
+                              onClick={() => removeSavedDocument('VALID_ID_BACK', existingBackItem)}
+                              aria-label="Remove valid ID back"
+                            >
+                              <X size={14} />
+                            </button>
+                          </div>
+                        ) : null}
+                      </div>
+                    </div>
+                    <p className="mt-2 text-xs text-slate-500">Upload one image for front and one image for back. Each image is previewed inline.</p>
+                  </div>
+                );
+              }
+
+              if (item.type === 'VALID_ID_BACK') {
+                return null;
+              }
+
+              const stagedFiles = documentPickerFiles[item.type] || [];
+              const existingFiles = existingByType[item.type] || [];
+              const maxFiles = item.type === 'OTHER' ? 3 : 1;
+
+              return (
+                <div key={item.type} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                  <FileUpload
+                    label={`${item.label} ${item.required ? '*' : '(Optional)'}`}
+                    files={stagedFiles}
+                    multiple={item.type === 'OTHER'}
+                    maxFiles={maxFiles}
+                    accept=".jpg,.jpeg,.png,.webp,.pdf"
+                    helperText={item.type === 'OTHER' ? 'Up to 3 files. PNG, JPEG, WEBP, or PDF.' : 'Single file only. PNG, JPEG, WEBP, or PDF.'}
+                    onFilesChange={(files) => {
+                      const selected = files.slice(0, maxFiles);
+                      for (const candidate of selected) {
+                        if (!validateDocumentFile(candidate, item.label, false)) {
+                          return;
+                        }
+                      }
+
+                      setDocumentPickerFiles((prev) => ({ ...prev, [item.type]: selected }));
+                    }}
+                  />
+
+                  <p className="mt-2 text-xs text-slate-500">
+                    {stagedFiles.length > 0
+                      ? `${stagedFiles.length} file(s) selected for preview.`
+                      : existingFiles.length > 0
+                      ? `${existingFiles.length} saved file(s) already on record.`
+                      : 'No file selected yet.'}
                   </p>
+
+                  {existingFiles.length > 0 ? (
+                    <div className="mt-2 space-y-2">
+                      {existingFiles.map((existingFile, index) => {
+                        const source = getPreviewUrl(existingFile);
+                        const fileName = decodeURIComponent((existingFile.file_url || '').split('/').pop() || `${item.type}-${index + 1}`);
+
+                        return (
+                          <div key={`${existingFile.file_url}-${index}`} className="flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs">
+                            <span className="truncate pr-2 text-slate-700" title={fileName}>
+                              {fileName}
+                            </span>
+                            <div className="flex items-center gap-2">
+                              {source ? (
+                                <a
+                                  className="font-medium text-primary-700 underline"
+                                  href={source}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                >
+                                  View
+                                </a>
+                              ) : null}
+                              <button
+                                type="button"
+                                className="rounded-full border border-slate-300 bg-white p-1 text-slate-500 transition hover:text-red-600"
+                                onClick={() => removeSavedDocument(item.type, existingFile)}
+                                aria-label={`Remove ${item.label}`}
+                              >
+                                <X size={12} />
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : null}
+
+                  {item.type === 'OTHER' ? <p className="mt-1 text-xs text-slate-500">Other Documents accepts up to 3 files.</p> : null}
+                </div>
+              );
+            })}
+        </div>
+      </div>
+    );
+  };
+
+  const renderVerificationStep = () => {
+    const documentLabelMap = new Map(stepDocuments.map((item) => [item.type, item.label]));
+    documentLabelMap.set('OTHER', 'Other Documents');
+
+    const existingByType = formState.documents.items.reduce<Record<string, DocumentItem[]>>((acc, entry) => {
+      if (!acc[entry.document_type]) {
+        acc[entry.document_type] = [];
+      }
+      acc[entry.document_type].push(entry);
+      return acc;
+    }, {});
+
+    const categoryNames = categories
+      .filter((category) => formState.business.category_ids.includes(category.id))
+      .map((category) => category.name)
+      .join(', ');
+
+    const businessTypeNames = businessTypes
+      .filter((businessType) => formState.business.business_type_ids.includes(businessType.id))
+      .map((businessType) => businessType.name)
+      .join(', ');
+
+    const orderedDocumentTypes = Array.from(new Set(formState.documents.items.map((item) => item.document_type)));
+
+    return (
+      <div className="space-y-4">
+        <div className="rounded-xl border border-slate-200 bg-gradient-to-br from-white to-primary-50/40 p-4">
+          <h4 className="inline-flex items-center gap-2 font-semibold text-slate-900">
+            <ShieldCheck size={16} className="text-primary-600" />
+            Final Review
+          </h4>
+          <p className="mt-2 text-sm text-slate-600">
+            Review all collected information and uploaded documents before final submission.
+          </p>
+        </div>
+
+        <div className="grid gap-3 md:grid-cols-2">
+          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+            <h5 className="text-sm font-semibold text-slate-900">Profile</h5>
+            <dl className="mt-2 space-y-1 text-xs text-slate-700">
+              <div className="flex justify-between gap-2"><dt>First name</dt><dd>{formState.profile.first_name || '-'}</dd></div>
+              <div className="flex justify-between gap-2"><dt>Middle name</dt><dd>{formState.profile.middle_name || '-'}</dd></div>
+              <div className="flex justify-between gap-2"><dt>Last name</dt><dd>{formState.profile.last_name || '-'}</dd></div>
+              <div className="flex justify-between gap-2"><dt>Email</dt><dd>{formState.profile.email || '-'}</dd></div>
+              <div className="flex justify-between gap-2"><dt>Username</dt><dd>{formState.profile.username || '-'}</dd></div>
+              <div className="flex justify-between gap-2"><dt>Phone</dt><dd>{formState.profile.phone_number || '-'}</dd></div>
+            </dl>
+          </div>
+
+          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+            <h5 className="text-sm font-semibold text-slate-900">Business</h5>
+            <dl className="mt-2 space-y-1 text-xs text-slate-700">
+              <div className="flex justify-between gap-2"><dt>Name</dt><dd>{formState.business.business_name || '-'}</dd></div>
+              <div className="flex justify-between gap-2"><dt>Registration</dt><dd>{formState.business.registration_type || '-'}</dd></div>
+              <div className="flex justify-between gap-2"><dt>Categories</dt><dd className="text-right">{categoryNames || '-'}</dd></div>
+              <div className="flex justify-between gap-2"><dt>Business Types</dt><dd className="text-right">{businessTypeNames || '-'}</dd></div>
+            </dl>
+          </div>
+
+          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm md:col-span-2">
+            <h5 className="text-sm font-semibold text-slate-900">Location</h5>
+            <p className="mt-2 text-xs text-slate-700">
+              {[formState.location.house_number, formState.location.street_name, formState.location.barangay, formState.location.city_municipality, formState.location.province, formState.location.zip_code]
+                .filter(Boolean)
+                .join(', ') || '-'}
+            </p>
+            <p className="mt-1 text-xs text-slate-700">Latitude: {formState.location.latitude || '-'} | Longitude: {formState.location.longitude || '-'}</p>
+          </div>
+
+          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm md:col-span-2">
+            <h5 className="text-sm font-semibold text-slate-900">Documents</h5>
+            {orderedDocumentTypes.length === 0 ? (
+              <p className="mt-2 text-xs text-slate-600">No uploaded documents found.</p>
+            ) : (
+              <div className="mt-3 space-y-3">
+                {orderedDocumentTypes.map((documentType) => {
+                  const files = existingByType[documentType] || [];
+                  return (
+                    <div key={documentType} className="rounded-lg border border-slate-200 p-3">
+                      <p className="text-xs font-semibold text-slate-800">{documentLabelMap.get(documentType) || documentType}</p>
+                      <div className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                        {files.map((file, index) => {
+                          const source = resolveDocumentPreviewUrl(file.preview_url || file.file_url || '');
+                          const isImage = /\.(png|jpe?g|webp)($|\?)/i.test(source) || source.startsWith('data:image/');
+                          const fileName = decodeURIComponent((file.file_url || '').split('/').pop() || `${documentType}-${index + 1}`);
+
+                          if (isImage && source) {
+                            return (
+                              <div key={`${file.file_url}-${index}`} className="overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
+                                <img src={source} alt={fileName} className="h-24 w-full object-cover" />
+                                <p className="truncate px-2 py-1 text-[11px] text-slate-600">{fileName}</p>
+                              </div>
+                            );
+                          }
+
+                          return (
+                            <a
+                              key={`${file.file_url}-${index}`}
+                              href={source}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-primary-700 underline"
+                            >
+                              <FileText size={14} />
+                              <span className="truncate">{fileName}</span>
+                            </a>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div>
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <p className="text-xs font-semibold text-slate-700">Email OTP *</p>
+                {formState.verification.email_verified ? (
+                  <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">Verified</span>
                 ) : null}
               </div>
-            );
-          })}
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  disabled={Boolean(otpSendingChannel) || Boolean(otpVerifyingChannel)}
+                  onClick={() => requestVerificationOtp('EMAIL')}
+                >
+                  {otpSentChannels.EMAIL ? 'Resend OTP' : 'Send OTP'}
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  disabled={
+                    formState.verification.email_verified ||
+                    Boolean(otpVerifyingChannel) ||
+                    asSafeString(formState.verification.email_otp).trim().length !== 6
+                  }
+                  onClick={() => verifyVerificationOtp('EMAIL')}
+                >
+                  {otpVerifyingChannel === 'EMAIL' ? (
+                    <>
+                      <Loader2 size={14} className="animate-spin" />
+                      Verifying...
+                    </>
+                  ) : (
+                    'Verify'
+                  )}
+                </Button>
+              </div>
+            </div>
+            <OtpInput
+              value={formState.verification.email_otp}
+              onChange={(value) => {
+                patchNested('verification', { email_otp: value });
+                clearFieldError('verification', 'email_otp');
+              }}
+              length={6}
+              disabled={formState.verification.email_verified}
+              hint={formState.verification.email_verified ? 'Email is already verified.' : 'Enter the 6-digit code sent to your email.'}
+            />
+            {fieldErrors.verification.email_otp ? <p className="mt-2 text-xs font-medium text-red-600">{fieldErrors.verification.email_otp}</p> : null}
+          </div>
+
+          <div>
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <p className="text-xs font-semibold text-slate-700">Phone OTP *</p>
+                {formState.verification.phone_verified ? (
+                  <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">Verified</span>
+                ) : null}
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  disabled={Boolean(otpSendingChannel) || Boolean(otpVerifyingChannel)}
+                  onClick={() => requestVerificationOtp('PHONE')}
+                >
+                  {otpSentChannels.PHONE ? 'Resend OTP' : 'Send OTP'}
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  disabled={
+                    formState.verification.phone_verified ||
+                    Boolean(otpVerifyingChannel) ||
+                    asSafeString(formState.verification.phone_otp).trim().length !== 6
+                  }
+                  onClick={() => verifyVerificationOtp('PHONE')}
+                >
+                  {otpVerifyingChannel === 'PHONE' ? (
+                    <>
+                      <Loader2 size={14} className="animate-spin" />
+                      Verifying...
+                    </>
+                  ) : (
+                    'Verify'
+                  )}
+                </Button>
+              </div>
+            </div>
+            <OtpInput
+              value={formState.verification.phone_otp}
+              onChange={(value) => {
+                patchNested('verification', { phone_otp: value });
+                clearFieldError('verification', 'phone_otp');
+              }}
+              length={6}
+              disabled={formState.verification.phone_verified}
+              hint={formState.verification.phone_verified ? 'Phone number is already verified.' : 'Enter the 6-digit code sent via SMS.'}
+            />
+            {fieldErrors.verification.phone_otp ? <p className="mt-2 text-xs font-medium text-red-600">{fieldErrors.verification.phone_otp}</p> : null}
+          </div>
+
+          <Checkbox
+            checked={formState.verification.terms_accepted && formState.verification.privacy_accepted}
+            onChange={(e) => {
+              patchNested('verification', {
+                terms_accepted: e.target.checked,
+                privacy_accepted: e.target.checked,
+              });
+              clearFieldError('verification', 'terms_accepted');
+              clearFieldError('verification', 'privacy_accepted');
+            }}
+            label={
+              <span>
+                I agree to the{' '}
+                <button
+                  type="button"
+                  className="font-semibold text-primary-700 underline"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    setShowPrivacyModal(true);
+                  }}
+                >
+                  Privacy Policy
+                </button>{' '}
+                and{' '}
+                <button
+                  type="button"
+                  className="font-semibold text-primary-700 underline"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    setShowTermsModal(true);
+                  }}
+                >
+                  Terms & Conditions
+                </button>
+                .
+              </span>
+            }
+            description="Acceptance is required before merchant onboarding submission."
+            error={fieldErrors.verification.terms_accepted}
+          />
+        </div>
       </div>
-    </div>
-  );
-
-  const renderVerificationStep = () => (
-    <div className="space-y-4">
-      <div className="rounded-xl border border-slate-200 bg-gradient-to-br from-white to-primary-50/40 p-4">
-        <h4 className="inline-flex items-center gap-2 font-semibold text-slate-900">
-          <ShieldCheck size={16} className="text-primary-600" />
-          Final Review
-        </h4>
-        <p className="mt-2 text-sm text-slate-600">
-          Review your profile, business, location, and document entries before final submission.
-        </p>
-      </div>
-
-      <Button type="button" variant="secondary" onClick={requestVerificationOtp}>
-        Send / Resend OTP
-      </Button>
-
-      <div className="grid gap-4 md:grid-cols-2">
-        <Input
-          label="Email OTP *"
-          placeholder="Enter the 6-digit email OTP"
-          value={formState.verification.email_otp}
-          onChange={(e) => {
-            patchNested('verification', { email_otp: e.target.value });
-            clearFieldError('verification', 'email_otp');
-          }}
-          error={fieldErrors.verification.email_otp}
-        />
-        <Input
-          label="Phone OTP *"
-          placeholder="Enter the 6-digit SMS OTP"
-          value={formState.verification.phone_otp}
-          onChange={(e) => {
-            patchNested('verification', { phone_otp: e.target.value });
-            clearFieldError('verification', 'phone_otp');
-          }}
-          error={fieldErrors.verification.phone_otp}
-        />
-      </div>
-
-      <div className="space-y-3">
-        <Checkbox
-          checked={formState.verification.terms_accepted}
-          onChange={(e) => {
-            patchNested('verification', { terms_accepted: e.target.checked });
-            clearFieldError('verification', 'terms_accepted');
-          }}
-          label="I agree to the Terms and Conditions"
-          description="Acceptance is required before merchant onboarding submission."
-          error={fieldErrors.verification.terms_accepted}
-        />
-        <button type="button" className="text-sm font-medium text-primary-700 underline" onClick={() => setShowTermsModal(true)}>
-          View Terms and Conditions
-        </button>
-
-        <Checkbox
-          checked={formState.verification.privacy_accepted}
-          onChange={(e) => {
-            patchNested('verification', { privacy_accepted: e.target.checked });
-            clearFieldError('verification', 'privacy_accepted');
-          }}
-          label="I agree to the Privacy Policy"
-          description="You acknowledge data handling requirements for onboarding."
-          error={fieldErrors.verification.privacy_accepted}
-        />
-        <button type="button" className="text-sm font-medium text-primary-700 underline" onClick={() => setShowPrivacyModal(true)}>
-          View Privacy Policy
-        </button>
-      </div>
-    </div>
-  );
+    );
+  };
 
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top,_#f8fbff_0%,_#f3f6fb_50%,_#eef2f8_100%)] p-4 md:p-8">
@@ -1658,6 +2462,15 @@ export default function MerchantOnboardingPage() {
             longitude: normalizeCoordinate(lng),
           })
         }
+      />
+
+      <SelfieCaptureModal
+        open={showSelfieCaptureModal}
+        onClose={() => setShowSelfieCaptureModal(false)}
+        onSave={(dataUrl) => {
+          patchNested('documents', { selfie_with_id: dataUrl });
+          clearFieldError('documents', 'selfie_with_id');
+        }}
       />
 
       {showTermsModal ? (
