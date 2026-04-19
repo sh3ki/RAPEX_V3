@@ -1,12 +1,12 @@
 'use client';
 
 import { Check } from 'lucide-react';
-import { forwardRef, type InputHTMLAttributes } from 'react';
+import { forwardRef, type InputHTMLAttributes, type ReactNode } from 'react';
 import { cn } from '../../utils/cn';
 
 interface CheckboxProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'type'> {
-  label?: string;
-  description?: string;
+  label?: ReactNode;
+  description?: ReactNode;
   error?: string;
 }
 
