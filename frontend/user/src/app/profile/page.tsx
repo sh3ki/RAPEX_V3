@@ -3,14 +3,15 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
 import { User, Phone, Mail, Shield, LogOut, ChevronRight, Upload } from 'lucide-react';
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
+import { FileUpload } from '@shared/components/ui';
 
 export default function ProfilePage() {
   const { logout } = useAuthStore();
   const qc = useQueryClient();
-  const fileRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
+  const [kycFiles, setKycFiles] = useState<File[]>([]);
 
   const { data: profile } = useQuery({
     queryKey: ['profile'],
@@ -24,6 +25,7 @@ export default function ProfilePage() {
       fd.append('document', file);
       await api.post('/auth/kyc/upload/', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
       qc.invalidateQueries({ queryKey: ['profile'] });
+      setKycFiles([]);
     } catch {}
     setUploading(false);
   };
@@ -62,8 +64,25 @@ export default function ProfilePage() {
         {kycStatus === 'NOT_SUBMITTED' || kycStatus === 'REJECTED' ? (
           <>
             <p className="text-xs text-dark-muted">Upload a valid ID to verify your account.</p>
-            <input ref={fileRef} type="file" accept="image/*,.pdf" className="hidden" onChange={e => { if (e.target.files?.[0]) uploadKyc(e.target.files[0]); }} />
-            <button onClick={() => fileRef.current?.click()} disabled={uploading} className="btn-primary text-sm flex items-center gap-2">
+            <FileUpload
+              label=""
+              files={kycFiles}
+              multiple={false}
+              maxFiles={1}
+              accept=".jpg,.jpeg,.png,.webp,.pdf"
+              helperText="Upload one valid ID file. PNG, JPEG, WEBP, or PDF up to 10MB."
+              onFilesChange={(files) => setKycFiles(files.slice(0, 1))}
+            />
+            <button
+              onClick={() => {
+                const selected = kycFiles[0];
+                if (selected) {
+                  void uploadKyc(selected);
+                }
+              }}
+              disabled={uploading || !kycFiles.length}
+              className="btn-primary text-sm flex items-center gap-2"
+            >
               <Upload size={14} /> {uploading ? 'Uploading…' : 'Upload KYC Document'}
             </button>
           </>
