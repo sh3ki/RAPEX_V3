@@ -224,4 +224,36 @@ class KYCUploadSerializer(serializers.Serializer):
     kyc_id_photo = serializers.ImageField(required=False)
     kyc_selfie_photo = serializers.ImageField(required=False)
     kyc_business_doc = serializers.FileField(required=False)
+    document = serializers.FileField(required=False, write_only=True)
     kyc_id_type = serializers.CharField(max_length=50, required=False)
+
+    MAX_FILE_SIZE = 10 * 1024 * 1024
+    IMAGE_MIME_TYPES = {'image/jpeg', 'image/png', 'image/webp'}
+    DOC_MIME_TYPES = IMAGE_MIME_TYPES | {'application/pdf'}
+
+    def _validate_file(self, file_obj, allowed_types: set[str], field_name: str):
+        content_type = getattr(file_obj, 'content_type', '') or ''
+        if file_obj.size > self.MAX_FILE_SIZE:
+            raise serializers.ValidationError({field_name: 'File exceeds 10MB size limit.'})
+
+        if content_type not in allowed_types:
+            raise serializers.ValidationError({field_name: 'Unsupported file type.'})
+
+    def validate(self, attrs):
+        file_fields = ['kyc_id_photo', 'kyc_selfie_photo', 'kyc_business_doc', 'document']
+        if not any(attrs.get(field_name) for field_name in file_fields):
+            raise serializers.ValidationError('At least one document file is required.')
+
+        if attrs.get('kyc_id_photo'):
+            self._validate_file(attrs['kyc_id_photo'], self.IMAGE_MIME_TYPES, 'kyc_id_photo')
+
+        if attrs.get('kyc_selfie_photo'):
+            self._validate_file(attrs['kyc_selfie_photo'], self.IMAGE_MIME_TYPES, 'kyc_selfie_photo')
+
+        if attrs.get('kyc_business_doc'):
+            self._validate_file(attrs['kyc_business_doc'], self.DOC_MIME_TYPES, 'kyc_business_doc')
+
+        if attrs.get('document'):
+            self._validate_file(attrs['document'], self.DOC_MIME_TYPES, 'document')
+
+        return attrs
