@@ -1,4 +1,6 @@
 """RAPEX Merchant Module — Serializers"""
+from collections import defaultdict
+
 from rest_framework import serializers
 from .models import (
     MerchantStore,
@@ -102,8 +104,8 @@ class MerchantOnboardingProfileStepSerializer(serializers.Serializer):
     email = serializers.EmailField()
     username = serializers.CharField(max_length=150)
     phone_number = serializers.CharField(max_length=20)
-    password = serializers.CharField(write_only=True, min_length=8)
-    confirm_password = serializers.CharField(write_only=True, min_length=8)
+    password = serializers.CharField(write_only=True, min_length=8, required=False, allow_blank=True, default='')
+    confirm_password = serializers.CharField(write_only=True, min_length=8, required=False, allow_blank=True, default='')
 
 
 class MerchantOnboardingBusinessStepSerializer(serializers.Serializer):
@@ -135,9 +137,9 @@ class MerchantOnboardingDocumentUploadSerializer(serializers.Serializer):
     file = serializers.FileField()
 
     def validate_file(self, value):
-        max_size = 5 * 1024 * 1024
+        max_size = 10 * 1024 * 1024
         if value.size > max_size:
-            raise serializers.ValidationError('File exceeds 5MB size limit.')
+            raise serializers.ValidationError('File exceeds 10MB size limit.')
 
         allowed_content_types = {
             'image/jpeg',
@@ -153,8 +155,14 @@ class MerchantOnboardingDocumentUploadSerializer(serializers.Serializer):
     def validate(self, attrs):
         document_type = attrs['document_type']
         content_type = getattr(attrs['file'], 'content_type', None)
-        if document_type == MerchantDocument.DocumentType.SELFIE_WITH_ID and content_type == 'application/pdf':
-            raise serializers.ValidationError({'file': 'SELFIE_WITH_ID must be an image file.'})
+        image_only_types = {
+            MerchantDocument.DocumentType.SELFIE_WITH_ID,
+            MerchantDocument.DocumentType.VALID_ID_FRONT,
+            MerchantDocument.DocumentType.VALID_ID_BACK,
+        }
+
+        if document_type in image_only_types and (not content_type or not content_type.startswith('image/')):
+            raise serializers.ValidationError({'file': f'{document_type} must be an image file.'})
         return attrs
 
 
@@ -171,12 +179,147 @@ class MerchantOnboardingProfileImageUploadSerializer(serializers.Serializer):
 class MerchantOnboardingDocumentsStepSerializer(serializers.Serializer):
     documents = MerchantOnboardingDocumentItemSerializer(many=True)
 
+    REQUIRED_BY_REGISTRATION = {
+        MerchantBusinessProfile.RegistrationType.UNREGISTERED: {
+            MerchantDocument.DocumentType.SELFIE_WITH_ID,
+            MerchantDocument.DocumentType.VALID_ID_FRONT,
+            MerchantDocument.DocumentType.VALID_ID_BACK,
+        },
+        MerchantBusinessProfile.RegistrationType.REGISTERED_NON_VAT: {
+            MerchantDocument.DocumentType.SELFIE_WITH_ID,
+            MerchantDocument.DocumentType.VALID_ID_FRONT,
+            MerchantDocument.DocumentType.VALID_ID_BACK,
+            MerchantDocument.DocumentType.BARANGAY_PERMIT,
+            MerchantDocument.DocumentType.DTI_OR_SEC,
+        },
+        MerchantBusinessProfile.RegistrationType.REGISTERED_VAT: {
+            MerchantDocument.DocumentType.SELFIE_WITH_ID,
+            MerchantDocument.DocumentType.VALID_ID_FRONT,
+            MerchantDocument.DocumentType.VALID_ID_BACK,
+            MerchantDocument.DocumentType.BIR_2303,
+            MerchantDocument.DocumentType.DTI_OR_SEC,
+            MerchantDocument.DocumentType.MAYORS_PERMIT,
+        },
+    }
+
+    ALLOWED_BY_REGISTRATION = {
+        MerchantBusinessProfile.RegistrationType.UNREGISTERED: {
+            MerchantDocument.DocumentType.SELFIE_WITH_ID,
+            MerchantDocument.DocumentType.VALID_ID_FRONT,
+            MerchantDocument.DocumentType.VALID_ID_BACK,
+            MerchantDocument.DocumentType.OTHER,
+        },
+        MerchantBusinessProfile.RegistrationType.REGISTERED_NON_VAT: {
+            MerchantDocument.DocumentType.SELFIE_WITH_ID,
+            MerchantDocument.DocumentType.VALID_ID_FRONT,
+            MerchantDocument.DocumentType.VALID_ID_BACK,
+            MerchantDocument.DocumentType.BARANGAY_PERMIT,
+            MerchantDocument.DocumentType.DTI_OR_SEC,
+            MerchantDocument.DocumentType.BIR_2303,
+            MerchantDocument.DocumentType.MAYORS_PERMIT,
+            MerchantDocument.DocumentType.OTHER,
+        },
+        MerchantBusinessProfile.RegistrationType.REGISTERED_VAT: {
+            MerchantDocument.DocumentType.SELFIE_WITH_ID,
+            MerchantDocument.DocumentType.VALID_ID_FRONT,
+            MerchantDocument.DocumentType.VALID_ID_BACK,
+            MerchantDocument.DocumentType.BIR_2303,
+            MerchantDocument.DocumentType.DTI_OR_SEC,
+            MerchantDocument.DocumentType.MAYORS_PERMIT,
+            MerchantDocument.DocumentType.OTHER,
+        },
+    }
+
+    def validate(self, attrs):
+        documents = attrs.get('documents', [])
+        merchant_profile = self.context.get('merchant_profile')
+        business_profile = MerchantBusinessProfile.objects.filter(merchant=merchant_profile).first() if merchant_profile else None
+        registration_type = (
+            business_profile.registration_type
+            if business_profile
+            else MerchantBusinessProfile.RegistrationType.UNREGISTERED
+        )
+
+        allowed_types = self.ALLOWED_BY_REGISTRATION[registration_type]
+        required_types = self.REQUIRED_BY_REGISTRATION[registration_type]
+
+        counts = defaultdict(int)
+        for item in documents:
+            doc_type = item['document_type']
+            if doc_type not in allowed_types:
+                raise serializers.ValidationError(
+                    {
+                        'documents': (
+                            f'{doc_type} is not allowed for registration type {registration_type}.'
+                        )
+                    }
+                )
+            counts[doc_type] += 1
+
+        for required_type in required_types:
+            if counts.get(required_type, 0) == 0:
+                raise serializers.ValidationError(
+                    {'documents': f'Required document missing: {required_type}'}
+                )
+
+        single_file_types = {
+            MerchantDocument.DocumentType.SELFIE_WITH_ID,
+            MerchantDocument.DocumentType.VALID_ID_FRONT,
+            MerchantDocument.DocumentType.VALID_ID_BACK,
+            MerchantDocument.DocumentType.BARANGAY_PERMIT,
+            MerchantDocument.DocumentType.DTI_OR_SEC,
+            MerchantDocument.DocumentType.BIR_2303,
+            MerchantDocument.DocumentType.MAYORS_PERMIT,
+        }
+
+        for doc_type, count in counts.items():
+            if doc_type in single_file_types and count > 1:
+                raise serializers.ValidationError(
+                    {'documents': f'{doc_type} accepts one file only.'}
+                )
+
+            if doc_type == MerchantDocument.DocumentType.OTHER and count > 3:
+                raise serializers.ValidationError(
+                    {'documents': 'OTHER accepts up to 3 files only.'}
+                )
+
+        return attrs
+
 
 class MerchantOnboardingVerificationStepSerializer(serializers.Serializer):
-    email_otp = serializers.CharField(max_length=6)
-    phone_otp = serializers.CharField(max_length=6)
+    email_otp = serializers.CharField(max_length=6, min_length=6, required=False, allow_blank=True, trim_whitespace=True, default='')
+    phone_otp = serializers.CharField(max_length=6, min_length=6, required=False, allow_blank=True, trim_whitespace=True, default='')
     terms_accepted = serializers.BooleanField()
     privacy_accepted = serializers.BooleanField()
+
+
+class MerchantOnboardingSendOtpSerializer(serializers.Serializer):
+    CHANNEL_EMAIL = 'EMAIL'
+    CHANNEL_PHONE = 'PHONE'
+    CHANNEL_BOTH = 'BOTH'
+
+    channel = serializers.ChoiceField(
+        choices=[
+            (CHANNEL_EMAIL, 'Email OTP'),
+            (CHANNEL_PHONE, 'Phone OTP'),
+            (CHANNEL_BOTH, 'Both Email and Phone OTP'),
+        ],
+        required=False,
+        default=CHANNEL_BOTH,
+    )
+
+
+class MerchantOnboardingVerifyOtpSerializer(serializers.Serializer):
+    CHANNEL_EMAIL = 'EMAIL'
+    CHANNEL_PHONE = 'PHONE'
+
+    channel = serializers.ChoiceField(
+        choices=[
+            (CHANNEL_EMAIL, 'Email OTP'),
+            (CHANNEL_PHONE, 'Phone OTP'),
+        ]
+    )
+    otp_code = serializers.CharField(max_length=6, min_length=6, trim_whitespace=True)
 
 
 class MerchantLocationSerializer(serializers.ModelSerializer):
