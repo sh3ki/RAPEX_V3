@@ -25,6 +25,16 @@ export function Pagination({
   onPageChange,
   onRowsPerPageChange,
 }: PaginationProps) {
+  const safeTotalPages = Math.max(totalPages, 1);
+  const startPage = Math.max(1, page - 1);
+  const endPage = Math.min(safeTotalPages, startPage + 2);
+  const normalizedStart = Math.max(1, endPage - 2);
+  const visiblePages = [];
+
+  for (let cursor = normalizedStart; cursor <= endPage; cursor += 1) {
+    visiblePages.push(cursor);
+  }
+
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 border-t border-gray-200 px-4 py-3 text-sm text-gray-600">
       <p>
@@ -52,13 +62,26 @@ export function Pagination({
           <ChevronLeft size={14} />
           Previous
         </button>
-        <span className="min-w-16 text-center text-sm text-gray-700">
-          {page} / {Math.max(totalPages, 1)}
-        </span>
+
+        {visiblePages.map((pageNumber) => (
+          <button
+            key={pageNumber}
+            type="button"
+            onClick={() => onPageChange(pageNumber)}
+            className={`inline-flex h-8 min-w-8 items-center justify-center rounded-md border px-2 text-sm ${
+              pageNumber === page
+                ? 'border-primary-500 bg-primary-500 text-white'
+                : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
+            }`}
+          >
+            {pageNumber}
+          </button>
+        ))}
+
         <button
           type="button"
-          onClick={() => onPageChange(Math.min(totalPages, page + 1))}
-          disabled={page >= totalPages}
+          onClick={() => onPageChange(Math.min(safeTotalPages, page + 1))}
+          disabled={page >= safeTotalPages}
           className="inline-flex h-9 items-center gap-1 rounded-md border border-gray-300 bg-white px-3 disabled:opacity-50"
         >
           Next
