@@ -3,6 +3,7 @@ export * from './Breadcrumb';
 export * from './Button';
 export * from './Calendar';
 export * from './Checkbox';
+export * from './ConfirmationModal';
 export * from './ColorPicker';
 export * from './ColumnsToggleButton';
 export * from './DatePicker';
