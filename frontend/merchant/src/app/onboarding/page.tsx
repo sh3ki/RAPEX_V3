@@ -579,6 +579,7 @@ function SelfieCaptureModal({
 
 export default function MerchantOnboardingPage() {
   const router = useRouter();
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const user = useAuthStore((s) => s.user);
   const setUser = useAuthStore((s) => s.setUser);
   const logout = useAuthStore((s) => s.logout);
@@ -738,13 +739,8 @@ export default function MerchantOnboardingPage() {
   }, [otpSentChannels]);
 
   useEffect(() => {
-    if (!user) {
+    if (!isAuthenticated) {
       router.replace('/login');
-      return;
-    }
-
-    if (String(user.status || '').toUpperCase() === 'PENDING' && user.wizard_completed) {
-      router.replace('/pending');
       return;
     }
 
@@ -789,8 +785,43 @@ export default function MerchantOnboardingPage() {
           }));
         }
 
-        const stateResp = await api.get('/merchant/onboarding/state/');
-        const payload = stateResp.data;
+        const [stateResp, profileResp] = await Promise.all([
+          api.get('/merchant/onboarding/state/'),
+          api.get('/auth/merchant/profile/'),
+        ]);
+
+        const payload = stateResp.data || {};
+        const accountPayload = payload.account || {};
+        const profileUser = profileResp.data?.user;
+
+        if (profileUser?.id) {
+          const nextUser = {
+            ...(user || {}),
+            ...profileUser,
+          };
+
+          const shouldSyncAuthUser =
+            profileUser.status !== user?.status ||
+            profileUser.wizard_completed !== user?.wizard_completed ||
+            profileUser.first_name !== user?.first_name ||
+            profileUser.last_name !== user?.last_name ||
+            profileUser.phone !== user?.phone ||
+            profileUser.email !== user?.email;
+
+          if (shouldSyncAuthUser) {
+            setUser(nextUser as any);
+          }
+        }
+
+        const resolvedStatus = String(profileUser?.status || accountPayload.status || user?.status || '').toUpperCase();
+        const resolvedWizardCompleted = Boolean(
+          profileUser?.wizard_completed ?? accountPayload.wizard_completed ?? user?.wizard_completed
+        );
+
+        if (resolvedStatus && resolvedStatus !== 'PENDING' && resolvedWizardCompleted) {
+          router.replace('/dashboard');
+          return;
+        }
         const existingDocuments = (payload.documents || []).map((item: any) => {
           const storagePath = asSafeString(item.storage_path || item.file_url);
           const previewUrl = resolveDocumentPreviewUrl(asSafeString(item.file_url || item.storage_path));
@@ -872,7 +903,7 @@ export default function MerchantOnboardingPage() {
     };
 
     void bootstrap();
-  }, [patchState, router, showErrorToast, user]);
+  }, [isAuthenticated, patchState, router, setUser, showErrorToast, user]);
 
   useEffect(() => {
     const loadLookups = async () => {
