@@ -1,10 +1,12 @@
 'use client';
 
+import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import DashboardLayout from '@/components/DashboardLayout';
 import StatusBadge from '@/components/StatusBadge';
 import api from '@/lib/api';
 import { CheckCircle, XCircle, PackageCheck } from 'lucide-react';
+import { DataTable, TablePageLayout, TableRowDetailsModal } from '@shared/components/table';
 
 interface OrderRow {
   id: string;
@@ -17,6 +19,8 @@ interface OrderRow {
 }
 
 export default function OrdersPage() {
+  const [activeTab, setActiveTab] = useState<'all' | 'pending' | 'active' | 'awaiting_pickup' | 'completed'>('all');
+  const [selectedOrder, setSelectedOrder] = useState<OrderRow | null>(null);
   const queryClient = useQueryClient();
 
   const { data: orders = [], isLoading } = useQuery<OrderRow[]>({
@@ -47,102 +51,114 @@ export default function OrdersPage() {
     completed: orders.filter((o) => ['DELIVERED', 'IN_TRANSIT', 'PICKED_UP'].includes(o.status)),
   };
 
-  const renderOrderCard = (order: OrderRow) => (
-    <div key={order.id} className="card flex items-center justify-between">
-      <div>
-        <p className="text-gray-900 font-medium">#{order.order_number}</p>
-        <p className="text-gray-500 text-xs">
-          {new Date(order.created_at).toLocaleString()} · {order.delivery_mode || '—'}
-        </p>
-      </div>
-      <div className="flex items-center gap-3">
-        <span className="text-gray-900 font-semibold">₱{Number(order.total_amount).toLocaleString()}</span>
-        <StatusBadge status={order.status} />
-        {order.status === 'PENDING_MERCHANT' && (
-          <div className="flex gap-2">
-            <button
-              onClick={() => acceptMut.mutate(order.id)}
-              className="flex items-center gap-1 text-green-400 hover:text-green-300 text-xs font-medium"
-              disabled={acceptMut.isPending}
-            >
-              <CheckCircle size={16} /> Accept
-            </button>
-            <button
-              onClick={() => rejectMut.mutate(order.id)}
-              className="flex items-center gap-1 text-red-400 hover:text-red-300 text-xs font-medium"
-              disabled={rejectMut.isPending}
-            >
-              <XCircle size={16} /> Reject
-            </button>
-          </div>
-        )}
-        {order.status === 'ASSIGNED' && (
-          <button
-            onClick={() => pickupMut.mutate(order.id)}
-            className="flex items-center gap-1 text-blue-400 hover:text-blue-300 text-xs font-medium"
-            disabled={pickupMut.isPending}
-          >
-            <PackageCheck size={16} /> Confirm Pickup
-          </button>
-        )}
-      </div>
-    </div>
-  );
+  const columns = [
+    { key: 'order_number', label: 'Order #' },
+    {
+      key: 'status',
+      label: 'Status',
+      render: (row: OrderRow) => <StatusBadge status={row.status} />,
+    },
+    {
+      key: 'delivery_mode',
+      label: 'Delivery Mode',
+      render: (row: OrderRow) => row.delivery_mode || 'N/A',
+    },
+    {
+      key: 'total_amount',
+      label: 'Amount',
+      render: (row: OrderRow) => `PHP ${Number(row.total_amount || 0).toLocaleString()}`,
+      sortValue: (row: OrderRow) => Number(row.total_amount || 0),
+    },
+    {
+      key: 'created_at',
+      label: 'Created',
+      render: (row: OrderRow) => new Date(row.created_at).toLocaleString(),
+      sortValue: (row: OrderRow) => new Date(row.created_at).getTime(),
+    },
+  ];
 
   return (
     <DashboardLayout>
-        <div className="mb-6">
-          <h1 className="text-2xl font-bold text-gray-900">Orders</h1>
-          <p className="text-sm text-gray-500 mt-1">Manage incoming and active orders</p>
-        </div>
+      <TablePageLayout
+        title="Orders"
+        subtitle="Manage incoming and active orders"
+        breadcrumbs={[{ label: 'Merchant Dashboard', href: '/dashboard' }, { label: 'Orders' }]}
+      >
+        <DataTable
+          loading={isLoading}
+          columns={columns}
+          data={orders}
+          onRowClick={(row) => setSelectedOrder(row)}
+          tabs={[
+            { value: 'all', label: 'All', count: orders.length },
+            { value: 'pending', label: 'Pending', count: groupedOrders.pending.length },
+            { value: 'active', label: 'Active', count: groupedOrders.active.length },
+            { value: 'awaiting_pickup', label: 'Awaiting Pickup', count: groupedOrders.awaiting_pickup.length },
+            { value: 'completed', label: 'Completed', count: groupedOrders.completed.length },
+          ]}
+          activeTab={activeTab}
+          onTabChange={(value) => setActiveTab(value as typeof activeTab)}
+          filterByTab={(row, tab) => {
+            if (tab === 'all') {
+              return true;
+            }
+            if (tab === 'pending') {
+              return row.status === 'PENDING_MERCHANT';
+            }
+            if (tab === 'active') {
+              return ['PREPARING', 'COOKING', 'READY_FOR_PICKUP'].includes(row.status);
+            }
+            if (tab === 'awaiting_pickup') {
+              return row.status === 'ASSIGNED';
+            }
+            return ['DELIVERED', 'IN_TRANSIT', 'PICKED_UP'].includes(row.status);
+          }}
+          getRowActions={(row) => {
+            if (row.status === 'PENDING_MERCHANT') {
+              return [
+                {
+                  label: 'Accept Order',
+                  onClick: () => acceptMut.mutate(row.id),
+                  icon: <CheckCircle size={14} />,
+                  disabled: acceptMut.isPending,
+                },
+                {
+                  label: 'Reject Order',
+                  onClick: () => rejectMut.mutate(row.id),
+                  icon: <XCircle size={14} />,
+                  disabled: rejectMut.isPending,
+                },
+              ];
+            }
 
-        {isLoading ? (
-          <div className="text-gray-500 text-center py-20">Loading orders...</div>
-        ) : (
-          <div className="space-y-8">
-            {/* Pending */}
-            {groupedOrders.pending.length > 0 && (
-              <section>
-                <h2 className="text-lg font-semibold text-yellow-400 mb-3">
-                  Pending ({groupedOrders.pending.length})
-                </h2>
-                <div className="space-y-3">{groupedOrders.pending.map(renderOrderCard)}</div>
-              </section>
-            )}
+            if (row.status === 'ASSIGNED') {
+              return [
+                {
+                  label: 'Confirm Pickup',
+                  onClick: () => pickupMut.mutate(row.id),
+                  icon: <PackageCheck size={14} />,
+                  disabled: pickupMut.isPending,
+                },
+              ];
+            }
 
-            {/* Active */}
-            {groupedOrders.active.length > 0 && (
-              <section>
-                <h2 className="text-lg font-semibold text-blue-400 mb-3">
-                  Active ({groupedOrders.active.length})
-                </h2>
-                <div className="space-y-3">{groupedOrders.active.map(renderOrderCard)}</div>
-              </section>
-            )}
+            return [];
+          }}
+        />
+      </TablePageLayout>
 
-            {/* Awaiting Pickup */}
-            {groupedOrders.awaiting_pickup.length > 0 && (
-              <section>
-                <h2 className="text-lg font-semibold text-purple-400 mb-3">
-                  Awaiting Rider Pickup ({groupedOrders.awaiting_pickup.length})
-                </h2>
-                <div className="space-y-3">{groupedOrders.awaiting_pickup.map(renderOrderCard)}</div>
-              </section>
-            )}
-
-            {/* Recent Completed */}
-            <section>
-              <h2 className="text-lg font-semibold text-green-400 mb-3">
-                Recent ({groupedOrders.completed.length})
-              </h2>
-              {groupedOrders.completed.length > 0 ? (
-                <div className="space-y-3">{groupedOrders.completed.slice(0, 10).map(renderOrderCard)}</div>
-              ) : (
-                <p className="text-gray-500 text-sm">No recent completed orders</p>
-              )}
-            </section>
-          </div>
-        )}
+      <TableRowDetailsModal
+        open={Boolean(selectedOrder)}
+        title="Order Details"
+        onClose={() => setSelectedOrder(null)}
+        rows={selectedOrder ? [
+          { label: 'Order #', value: selectedOrder.order_number },
+          { label: 'Status', value: selectedOrder.status },
+          { label: 'Delivery Mode', value: selectedOrder.delivery_mode || 'N/A' },
+          { label: 'Amount', value: `PHP ${Number(selectedOrder.total_amount || 0).toLocaleString()}` },
+          { label: 'Created At', value: new Date(selectedOrder.created_at).toLocaleString() },
+        ] : []}
+      />
     </DashboardLayout>
   );
 }
