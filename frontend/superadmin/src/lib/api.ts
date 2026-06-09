@@ -1,5 +1,6 @@
 import axios from 'axios';
 import Cookies from 'js-cookie';
+import { clearAuthState } from '@/store/authStore';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
@@ -27,8 +28,7 @@ api.interceptors.response.use(
         originalRequest.headers.Authorization = `Bearer ${data.data.access}`;
         return api(originalRequest);
       } catch {
-        Cookies.remove('access_token');
-        Cookies.remove('refresh_token');
+        clearAuthState();
         window.location.href = '/login';
       }
     }
