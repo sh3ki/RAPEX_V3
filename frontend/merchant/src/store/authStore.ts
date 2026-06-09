@@ -104,3 +104,11 @@ export const useAuthStore = create<AuthState>((set) => ({
     set({ user, isAuthenticated: true });
   },
 }));
+
+// Export function for API interceptor to call logout properly
+export const clearAuthState = () => {
+  Cookies.remove('access_token');
+  Cookies.remove('refresh_token');
+  persistUser(null);
+  useAuthStore.setState({ user: null, isAuthenticated: false });
+};
