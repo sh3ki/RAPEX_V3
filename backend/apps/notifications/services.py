@@ -26,6 +26,18 @@ EVENT_TEMPLATES = {
     'referral.credited': {'title': 'Referral Bonus', 'body': 'You earned {points} points from a referral!'},
     'remittance.due_soon': {'title': 'Remittance Due Soon', 'body': 'Your remittance of ₱{amount} is due soon.'},
     'remittance.overdue': {'title': 'Remittance Overdue', 'body': 'Your remittance of ₱{amount} is overdue!'},
+    'merchant.registered': {
+        'title': 'New Merchant Registered',
+        'body': '{merchant_display} created a merchant account and started onboarding.',
+    },
+    'merchant.onboarding_step_updated': {
+        'title': 'Merchant Onboarding Updated',
+        'body': '{merchant_display} updated their onboarding (step {step_label}).',
+    },
+    'merchant.onboarding_submitted': {
+        'title': 'Merchant KYC Review Needed',
+        'body': '{merchant_display} submitted onboarding details. Pending merchant KYC: {pending_kyc_count}.',
+    },
     'system.broadcast': {'title': '{title}', 'body': '{body}'},
 }
 
@@ -58,7 +70,19 @@ class NotificationService:
         from .tasks import dispatch_notification
         dispatch_notification.delay(str(notification.id))
 
-        return notification
+    @staticmethod
+    def send_to_role(role, event_type, data=None):
+        """Dispatch the same event to all active users of a role."""
+        from apps.accounts.models import CustomUser
+
+        recipient_ids = CustomUser.objects.filter(
+            role=role,
+            is_active=True,
+            is_deleted=False,
+        ).values_list('id', flat=True)
+
+        for recipient_id in recipient_ids:
+            NotificationService.send(recipient_id, role, event_type, data=data)
 
     @staticmethod
     def mark_read(notification_id, user_id):
