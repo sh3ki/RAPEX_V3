@@ -3,9 +3,19 @@ import { useQuery } from '@tanstack/react-query';
 import api from '@/lib/api';
 import { Gift, Copy, Users, Check } from 'lucide-react';
 import { useState } from 'react';
+import DashboardLayout from '@/components/DashboardLayout';
+import { DataTable, TablePageLayout, TableRowDetailsModal } from '@shared/components/table';
+
+interface ReferralEntry {
+  name?: string;
+  phone?: string;
+  created_at?: string;
+  status?: string;
+}
 
 export default function ReferralPage() {
   const [copied, setCopied] = useState(false);
+  const [selectedReferral, setSelectedReferral] = useState<ReferralEntry | null>(null);
 
   const { data } = useQuery({
     queryKey: ['referral'],
@@ -15,6 +25,26 @@ export default function ReferralPage() {
   const code = data?.referral_code || data?.code || '---';
   const total = data?.total_referrals || data?.count || 0;
   const earned = data?.total_earned || data?.earnings || 0;
+  const referralRows: ReferralEntry[] = (data?.referrals || []) as ReferralEntry[];
+
+  const referralColumns = [
+    {
+      key: 'name',
+      label: 'Referral',
+      render: (row: ReferralEntry) => row.name || row.phone || 'User',
+    },
+    {
+      key: 'status',
+      label: 'Status',
+      render: (row: ReferralEntry) => row.status || 'Joined',
+    },
+    {
+      key: 'created_at',
+      label: 'Created',
+      render: (row: ReferralEntry) => row.created_at ? new Date(row.created_at).toLocaleDateString() : 'N/A',
+      sortValue: (row: ReferralEntry) => row.created_at ? new Date(row.created_at).getTime() : 0,
+    },
+  ];
 
   const copyCode = () => {
     navigator.clipboard.writeText(code);
@@ -23,8 +53,12 @@ export default function ReferralPage() {
   };
 
   return (
-    <div className="p-4 space-y-4">
-      <h1 className="text-xl font-bold">Refer & Earn</h1>
+    <DashboardLayout>
+      <TablePageLayout
+        title="Refer and Earn"
+        subtitle="Share your code and track referral progress"
+        breadcrumbs={[{ label: 'Home', href: '/' }, { label: 'Referral' }]}
+      >
 
       {/* Info card */}
       <div className="card text-center space-y-3 bg-gradient-to-br from-primary-500/10 to-transparent border-primary-500/20">
@@ -63,22 +97,30 @@ export default function ReferralPage() {
       </div>
 
       {/* Referral list */}
-      {(data?.referrals || []).length > 0 && (
+      {referralRows.length > 0 && (
         <>
           <h2 className="font-semibold text-sm text-dark-muted">Your Referrals</h2>
-          <div className="space-y-2">
-            {(data.referrals || []).map((r: any, i: number) => (
-              <div key={i} className="card !p-3 flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium">{r.name || r.phone || `User #${i + 1}`}</p>
-                  <p className="text-[10px] text-dark-muted">{new Date(r.created_at).toLocaleDateString()}</p>
-                </div>
-                <span className="badge-green">{r.status || 'Joined'}</span>
-              </div>
-            ))}
-          </div>
+          <DataTable
+            columns={referralColumns}
+            data={referralRows}
+            onRowClick={(row) => setSelectedReferral(row)}
+            searchPlaceholder="Search referral entries..."
+          />
         </>
       )}
-    </div>
+      </TablePageLayout>
+
+      <TableRowDetailsModal
+        open={Boolean(selectedReferral)}
+        title="Referral Details"
+        onClose={() => setSelectedReferral(null)}
+        rows={selectedReferral ? [
+          { label: 'Name', value: selectedReferral.name || 'N/A' },
+          { label: 'Phone', value: selectedReferral.phone || 'N/A' },
+          { label: 'Status', value: selectedReferral.status || 'Joined' },
+          { label: 'Created At', value: selectedReferral.created_at ? new Date(selectedReferral.created_at).toLocaleString() : 'N/A' },
+        ] : []}
+      />
+    </DashboardLayout>
   );
 }
