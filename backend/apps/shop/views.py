@@ -30,7 +30,12 @@ class ShopProductListView(generics.ListAPIView):
 
     def get_queryset(self):
         store_id = self.kwargs['store_id']
-        return ShopProduct.objects.filter(store_id=store_id, is_deleted=False)
+        queryset = ShopProduct.objects.filter(store_id=store_id, is_deleted=False)
+        if getattr(self.request.user, 'role', None) == 'MERCHANT':
+            queryset = queryset.filter(store__merchant=self.request.user.merchantprofile)
+        else:
+            queryset = queryset.filter(approval_status=ShopProduct.ApprovalStatus.APPROVED)
+        return queryset
 
 
 class ShopProductCreateView(APIView):
@@ -41,7 +46,12 @@ class ShopProductCreateView(APIView):
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
 
-        store = MerchantStore.objects.get(pk=store_id, store_type='SHOP')
+        store = MerchantStore.objects.get(
+            pk=store_id,
+            merchant=request.user.merchantprofile,
+            store_type='SHOP',
+            is_deleted=False,
+        )
         markup_rate, _ = SettingsService.calculate_markup('SHOP', data['base_price'])
 
         product = ShopProduct.objects.create(
@@ -54,8 +64,9 @@ class ShopProductCreateView(APIView):
             images=data.get('images', []),
             has_inventory=data.get('has_inventory', False),
             stock_qty=data.get('stock_qty', 0),
+            approval_status=ShopProduct.ApprovalStatus.PENDING,
         )
-        return Response(ShopProductSerializer(product).data, status=status.HTTP_201_CREATED)
+        return Response(ShopProductSerializer(product, context={'request': request}).data, status=status.HTTP_201_CREATED)
 
 
 class ShopProductDetailView(generics.RetrieveUpdateDestroyAPIView):
@@ -63,4 +74,7 @@ class ShopProductDetailView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = ShopProductSerializer
 
     def get_queryset(self):
-        return ShopProduct.objects.filter(is_deleted=False)
+        return ShopProduct.objects.filter(
+            is_deleted=False,
+            store__merchant=self.request.user.merchantprofile,
+        )
