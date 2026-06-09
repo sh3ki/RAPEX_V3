@@ -2,6 +2,7 @@
 from rest_framework import generics
 from rest_framework.permissions import IsAuthenticated
 from apps.core.permissions import IsMerchant
+from apps.merchant.models import MerchantStore
 from .models import MenuCategory, MenuItem, MenuItemVariant, MenuItemAddon
 from .serializers import (
     MenuCategorySerializer, MenuItemSerializer,
@@ -25,16 +26,31 @@ class MenuItemListCreateView(generics.ListCreateAPIView):
     serializer_class = MenuItemSerializer
 
     def get_queryset(self):
-        return MenuItem.objects.filter(store_id=self.kwargs['store_id'], is_deleted=False)
+        return MenuItem.objects.filter(
+            store_id=self.kwargs['store_id'],
+            store__merchant=self.request.user.merchantprofile,
+            is_deleted=False,
+        )
 
     def perform_create(self, serializer):
-        serializer.save(store_id=self.kwargs['store_id'])
+        store = MerchantStore.objects.get(
+            pk=self.kwargs['store_id'],
+            merchant=self.request.user.merchantprofile,
+            store_type='READY_TO_EAT',
+            is_deleted=False,
+        )
+        serializer.save(store=store, approval_status=MenuItem.ApprovalStatus.PENDING)
 
 
 class MenuItemDetailView(generics.RetrieveUpdateDestroyAPIView):
     permission_classes = [IsAuthenticated, IsMerchant]
     serializer_class = MenuItemSerializer
-    queryset = MenuItem.objects.filter(is_deleted=False)
+
+    def get_queryset(self):
+        return MenuItem.objects.filter(
+            is_deleted=False,
+            store__merchant=self.request.user.merchantprofile,
+        )
 
 
 class MenuItemVariantListCreateView(generics.ListCreateAPIView):
