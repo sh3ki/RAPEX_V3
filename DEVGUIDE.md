@@ -1055,6 +1055,23 @@ class OrderAlreadyCancelled(RapexAPIException):
         )
 ```
 
+### File Storage Taxonomy (Mandatory)
+
+- All upload writes must use `apps/core/storage.py` (`save_upload`, `normalize_storage_path`, URL resolvers).
+- Never construct path strings manually in views or serializers.
+- Use owner-first roots for role-scoped files:
+  - `user/{id}/...`
+  - `rider/{id}/...`
+  - `merchant/{id}/...`
+  - `admin/{id}/...`
+  - `superadmin/{id}/...`
+- Canonical examples:
+  - `merchant/{id}/files/valid_id/front/{filename}`
+  - `merchant/{id}/stores/{store_id}/products/{store_type}/media/images/{filename}`
+  - `merchant/{id}/stores/{store_id}/products/{store_type}/media/videos/{filename}`
+  - `communications/chat/threads/{thread_id}/attachments/{role}/{account_id}/files/{filename}`
+- Persist storage paths in DB, and resolve to absolute/signed URLs only at serializer/view response boundaries.
+
 ---
 
 ## 7. GIT WORKFLOW
@@ -1245,6 +1262,12 @@ MINIO_ACCESS_KEY=minioadmin
 MINIO_SECRET_KEY=minioadmin
 MINIO_BUCKET_NAME=rapex-media
 MINIO_USE_SSL=False
+
+# Upload taxonomy policy (enforced in backend/apps/core/storage.py)
+# - owner-first paths: user/{id}, rider/{id}, merchant/{id}, admin/{id}, superadmin/{id}
+# - role KYC: {role}/{id}/files/valid_id/front|selfie_with_id
+# - merchant docs: merchant/{id}/files/{document_group}/{document_type}
+# - merchant product media: merchant/{id}/stores/{store_id}/products/{store_type}/media/images|videos
 ```
 
 ### Frontend `.env.local`
