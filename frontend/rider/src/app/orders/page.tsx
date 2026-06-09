@@ -1,11 +1,23 @@
 'use client';
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import api from '@/lib/api';
 import StatusBadge from '@/components/StatusBadge';
 import { Package, ChevronRight } from 'lucide-react';
 import Link from 'next/link';
+import DashboardLayout from '@/components/DashboardLayout';
+import { DataTable, TablePageLayout, TableRowDetailsModal } from '@shared/components/table';
+
+interface RemittanceRow {
+  amount?: string;
+  created_at?: string;
+  status?: string;
+  description?: string;
+}
 
 export default function OrdersPage() {
+  const [selectedRemittance, setSelectedRemittance] = useState<RemittanceRow | null>(null);
+
   const { data: activeOrder } = useQuery({
     queryKey: ['active-order'],
     queryFn: async () => {
@@ -20,9 +32,35 @@ export default function OrdersPage() {
     queryFn: async () => { const { data } = await api.get('/rider/remittance/'); return data?.results || data || []; },
   });
 
+  const remittanceRows: RemittanceRow[] = (remittances || []) as RemittanceRow[];
+
+  const remittanceColumns = [
+    {
+      key: 'amount',
+      label: 'Amount',
+      render: (row: RemittanceRow) => `PHP ${parseFloat(row.amount || '0').toLocaleString()}`,
+      sortValue: (row: RemittanceRow) => parseFloat(row.amount || '0'),
+    },
+    {
+      key: 'status',
+      label: 'Status',
+      render: (row: RemittanceRow) => <StatusBadge status={row.status || 'COMPLETED'} />,
+    },
+    {
+      key: 'created_at',
+      label: 'Created At',
+      render: (row: RemittanceRow) => row.created_at ? new Date(row.created_at).toLocaleString() : 'N/A',
+      sortValue: (row: RemittanceRow) => row.created_at ? new Date(row.created_at).getTime() : 0,
+    },
+  ];
+
   return (
-    <div className="p-4 space-y-4">
-      <h1 className="text-xl font-bold">Orders</h1>
+    <DashboardLayout>
+      <TablePageLayout
+        title="Orders"
+        subtitle="Track active delivery and remittance history"
+        breadcrumbs={[{ label: 'Rider Dashboard', href: '/' }, { label: 'Orders' }]}
+      >
 
       {/* Active order */}
       {activeOrder && activeOrder.id ? (
@@ -51,22 +89,25 @@ export default function OrdersPage() {
       )}
 
       {/* Remittance history */}
-      <h2 className="font-semibold text-sm text-dark-muted">Remittance History</h2>
-      {(remittances || []).length === 0 ? (
-        <p className="text-center py-4 text-dark-muted text-xs">No remittance records</p>
-      ) : (
-        <div className="space-y-2">
-          {(remittances || []).map((r: any, i: number) => (
-            <div key={i} className="card !p-4 flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium">₦{parseFloat(r.amount || 0).toLocaleString()}</p>
-                <p className="text-[10px] text-dark-muted">{new Date(r.created_at).toLocaleString()}</p>
-              </div>
-              <StatusBadge status={r.status || 'COMPLETED'} />
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
+      <DataTable
+        columns={remittanceColumns}
+        data={remittanceRows}
+        onRowClick={(row) => setSelectedRemittance(row)}
+        searchPlaceholder="Search remittance amount, status, or date..."
+      />
+      </TablePageLayout>
+
+      <TableRowDetailsModal
+        open={Boolean(selectedRemittance)}
+        title="Remittance Details"
+        onClose={() => setSelectedRemittance(null)}
+        rows={selectedRemittance ? [
+          { label: 'Amount', value: `PHP ${parseFloat(selectedRemittance.amount || '0').toLocaleString()}` },
+          { label: 'Status', value: selectedRemittance.status || 'COMPLETED' },
+          { label: 'Created At', value: selectedRemittance.created_at ? new Date(selectedRemittance.created_at).toLocaleString() : 'N/A' },
+          { label: 'Description', value: selectedRemittance.description || 'N/A' },
+        ] : []}
+      />
+    </DashboardLayout>
   );
 }
