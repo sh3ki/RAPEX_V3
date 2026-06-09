@@ -100,7 +100,7 @@ export default function LoginPage() {
               value={identifier}
               onChange={(e) => setIdentifier(e.target.value)}
               className="w-full px-4 py-2.5 bg-white border border-gray-300 rounded-lg text-gray-900 text-sm placeholder-gray-400 focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/10 transition-all"
-              placeholder="user@rapex.ph or username"
+              placeholder="Username"
               required
             />
             <label className="block text-sm font-medium text-gray-700">{t.passwordLabel}</label>
