@@ -6,7 +6,8 @@ import DashboardLayout from '@/components/DashboardLayout';
 import DataTable from '@/components/DataTable';
 import StatusBadge from '@/components/StatusBadge';
 import api from '@/lib/api';
-import { Search, CheckCircle, XCircle, Wallet, Gift } from 'lucide-react';
+import { CheckCircle, XCircle, Wallet, Gift } from 'lucide-react';
+import { TablePageLayout, TableRowDetailsModal } from '@shared/components/table';
 
 interface RiderRow {
   id: string;
@@ -17,14 +18,14 @@ interface RiderRow {
 }
 
 export default function RidersPage() {
-  const [search, setSearch] = useState('');
+  const [selectedRider, setSelectedRider] = useState<RiderRow | null>(null);
   const [walletModal, setWalletModal] = useState<string | null>(null);
   const [walletAmount, setWalletAmount] = useState('');
   const queryClient = useQueryClient();
 
   const { data: riders = [], isLoading } = useQuery<RiderRow[]>({
-    queryKey: ['admin-riders', search],
-    queryFn: () => api.get('/admin/riders/', { params: search ? { search } : {} }).then((r) => r.data),
+    queryKey: ['admin-riders'],
+    queryFn: () => api.get('/admin/riders/').then((r) => r.data),
   });
 
   const approveMut = useMutation({
@@ -65,66 +66,71 @@ export default function RidersPage() {
       label: 'Status',
       render: (r: RiderRow) => <StatusBadge status={r.is_online ? 'Online' : 'Offline'} />,
     },
-    {
-      key: 'actions',
-      label: 'Actions',
-      render: (r: RiderRow) => (
-        <div className="flex gap-2 flex-wrap">
-          {r.kyc_status === 'PENDING' && (
-            <>
-              <button
-                onClick={(e) => { e.stopPropagation(); approveMut.mutate(r.id); }}
-                className="flex items-center gap-1 text-green-400 hover:text-green-300 text-xs"
-              >
-                <CheckCircle size={14} /> Approve
-              </button>
-              <button
-                onClick={(e) => { e.stopPropagation(); rejectMut.mutate(r.id); }}
-                className="flex items-center gap-1 text-red-400 hover:text-red-300 text-xs"
-              >
-                <XCircle size={14} /> Reject
-              </button>
-            </>
-          )}
-          <button
-            onClick={(e) => { e.stopPropagation(); setWalletModal(r.id); }}
-            className="flex items-center gap-1 text-blue-400 hover:text-blue-300 text-xs"
-          >
-            <Wallet size={14} /> Load
-          </button>
-          <button
-            onClick={(e) => { e.stopPropagation(); incentiveMut.mutate(r.id); }}
-            className="flex items-center gap-1 text-purple-400 hover:text-purple-300 text-xs"
-          >
-            <Gift size={14} /> Incentive
-          </button>
-        </div>
-      ),
-    },
   ];
 
   return (
     <DashboardLayout>
-        <div className="mb-6">
-          <h1 className="text-2xl font-bold text-gray-900">Rider Management</h1>
-          <p className="text-gray-500 text-sm mt-1">Manage rider accounts, KYC, wallet, and incentives</p>
-        </div>
-
-        <div className="relative mb-6 max-w-md">
-          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
-          <input
-            type="text"
-            className="input pl-10"
-            placeholder="Search by name or phone..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </div>
-
+      <TablePageLayout
+        title="Rider Management"
+        subtitle="Manage rider accounts, KYC, wallet, and incentives"
+        breadcrumbs={[{ label: 'Admin Dashboard', href: '/dashboard' }, { label: 'Riders' }]}
+      >
         <DataTable
+          loading={isLoading}
           columns={columns}
           data={riders}
+          searchPlaceholder="Search by rider, vehicle, or status..."
+          onRowClick={(row) => setSelectedRider(row)}
+          getRowActions={(row) => {
+            const actions = [
+              {
+                label: 'Load Wallet',
+                onClick: () => setWalletModal(row.id),
+                icon: <Wallet size={14} />,
+              },
+              {
+                label: 'Confirm Incentive',
+                onClick: () => incentiveMut.mutate(row.id),
+                icon: <Gift size={14} />,
+                disabled: incentiveMut.isPending,
+              },
+            ];
+
+            if (row.kyc_status === 'PENDING') {
+              return [
+                {
+                  label: 'Approve KYC',
+                  onClick: () => approveMut.mutate(row.id),
+                  icon: <CheckCircle size={14} />,
+                  disabled: approveMut.isPending,
+                },
+                {
+                  label: 'Reject KYC',
+                  onClick: () => rejectMut.mutate(row.id),
+                  icon: <XCircle size={14} />,
+                  disabled: rejectMut.isPending,
+                },
+                ...actions,
+              ];
+            }
+
+            return actions;
+          }}
         />
+      </TablePageLayout>
+
+      <TableRowDetailsModal
+        open={Boolean(selectedRider)}
+        title="Rider Details"
+        onClose={() => setSelectedRider(null)}
+        rows={selectedRider ? [
+          { label: 'ID', value: selectedRider.id },
+          { label: 'Name', value: selectedRider.full_name },
+          { label: 'Vehicle', value: selectedRider.vehicle_type },
+          { label: 'KYC Status', value: selectedRider.kyc_status },
+          { label: 'Online', value: selectedRider.is_online ? 'Yes' : 'No' },
+        ] : []}
+      />
 
         {/* Wallet Load Modal */}
         {walletModal && (
