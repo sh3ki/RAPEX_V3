@@ -8,6 +8,7 @@ import StatusBadge from '@/components/StatusBadge';
 import api from '@/lib/api';
 import { Send, Bell } from 'lucide-react';
 import type { TableColumn } from '@shared/components/table';
+import { TablePageLayout, TableRowDetailsModal } from '@shared/components/table';
 
 interface NotifRow {
   id: string;
@@ -23,6 +24,7 @@ interface BroadcastResponse {
 
 export default function NotificationsPage() {
   const [showBroadcast, setShowBroadcast] = useState(false);
+  const [selectedLog, setSelectedLog] = useState<NotifRow | null>(null);
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
   const [roles, setRoles] = useState<string[]>(['USER', 'MERCHANT', 'RIDER']);
@@ -73,22 +75,37 @@ export default function NotificationsPage() {
 
   return (
     <DashboardLayout>
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Notifications</h1>
-            <p className="text-gray-500 text-sm mt-1">Notification log & broadcast messaging</p>
-          </div>
+      <TablePageLayout
+        title="Notifications"
+        subtitle="Notification log and broadcast messaging"
+        breadcrumbs={[{ label: 'Admin Dashboard', href: '/dashboard' }, { label: 'Notifications' }]}
+        actionSlot={
           <button className="btn-primary flex items-center gap-2" onClick={() => setShowBroadcast(true)}>
             <Send size={16} /> Broadcast
           </button>
-        </div>
-
+        }
+      >
         <DataTable
           loading={isLoading}
           columns={columns}
           data={logs}
           selectable={false}
+          onRowClick={(row) => setSelectedLog(row)}
         />
+      </TablePageLayout>
+
+      <TableRowDetailsModal
+        open={Boolean(selectedLog)}
+        title="Notification Log Details"
+        onClose={() => setSelectedLog(null)}
+        rows={selectedLog ? [
+          { label: 'ID', value: selectedLog.id },
+          { label: 'Event Type', value: selectedLog.event_type },
+          { label: 'Recipient Role', value: selectedLog.recipient_role },
+          { label: 'Delivery Status', value: selectedLog.delivery_status },
+          { label: 'Created At', value: new Date(selectedLog.created_at).toLocaleString() },
+        ] : []}
+      />
 
         {/* Broadcast Modal */}
         {showBroadcast && (
