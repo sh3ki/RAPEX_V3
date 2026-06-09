@@ -2,10 +2,11 @@
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import Sidebar from '@/components/Sidebar';
+import DashboardLayout from '@/components/DashboardLayout';
 import DataTable from '@/components/DataTable';
 import api from '@/lib/api';
 import { ShieldBan, Plus } from 'lucide-react';
+import { TablePageLayout, TableRowDetailsModal } from '@shared/components/table';
 
 interface BlacklistRow {
   id: string;
@@ -18,6 +19,7 @@ interface BlacklistRow {
 
 export default function BlacklistPage() {
   const [showAdd, setShowAdd] = useState(false);
+  const [selectedEntry, setSelectedEntry] = useState<BlacklistRow | null>(null);
   const [form, setForm] = useState({ subject_id: '', subject_role: 'USER', reason: '', is_permanent: true });
   const queryClient = useQueryClient();
 
@@ -56,22 +58,33 @@ export default function BlacklistPage() {
   ];
 
   return (
-    <div className="flex min-h-screen">
-      <Sidebar />
-      <main className="flex-1 lg:ml-64 p-6">
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-              <ShieldBan size={24} className="text-red-400" /> Blacklist
-            </h1>
-            <p className="text-dark-muted text-sm mt-1">Blacklisted accounts</p>
-          </div>
+    <DashboardLayout>
+      <TablePageLayout
+        title="Blacklist"
+        subtitle="Blacklisted accounts"
+        breadcrumbs={[{ label: 'SuperAdmin Dashboard', href: '/dashboard' }, { label: 'Blacklist' }]}
+        actionSlot={
           <button className="btn-primary flex items-center gap-2" onClick={() => setShowAdd(true)}>
             <Plus size={16} /> Add to Blacklist
           </button>
-        </div>
+        }
+      >
+        <DataTable loading={isLoading} columns={columns} data={entries} onRowClick={(row) => setSelectedEntry(row)} />
+      </TablePageLayout>
 
-        <DataTable columns={columns} data={entries} />
+      <TableRowDetailsModal
+        open={Boolean(selectedEntry)}
+        title="Blacklist Entry Details"
+        onClose={() => setSelectedEntry(null)}
+        rows={selectedEntry ? [
+          { label: 'ID', value: selectedEntry.id },
+          { label: 'Subject ID', value: selectedEntry.subject_id },
+          { label: 'Role', value: selectedEntry.subject_role },
+          { label: 'Reason', value: selectedEntry.reason },
+          { label: 'Type', value: selectedEntry.is_permanent ? 'Permanent' : 'Temporary' },
+          { label: 'Created At', value: new Date(selectedEntry.created_at).toLocaleString() },
+        ] : []}
+      />
 
         {showAdd && (
           <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
@@ -97,8 +110,7 @@ export default function BlacklistPage() {
             </div>
           </div>
         )}
-      </main>
-    </div>
+    </DashboardLayout>
   );
 }
 
