@@ -2,10 +2,11 @@
 
 import { useState } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
-import Sidebar from '@/components/Sidebar';
+import DashboardLayout from '@/components/DashboardLayout';
 import DataTable from '@/components/DataTable';
 import api from '@/lib/api';
 import { Wallet, CreditCard } from 'lucide-react';
+import { TablePageLayout, TableRowDetailsModal } from '@shared/components/table';
 
 interface TxnRow {
   id: string;
@@ -19,6 +20,7 @@ interface TxnRow {
 
 export default function WalletLedgerPage() {
   const [showAdjust, setShowAdjust] = useState(false);
+  const [selectedTxn, setSelectedTxn] = useState<TxnRow | null>(null);
   const [adjustForm, setAdjustForm] = useState({
     owner_id: '',
     owner_type: 'RIDER',
@@ -70,25 +72,39 @@ export default function WalletLedgerPage() {
   ];
 
   return (
-    <div className="flex min-h-screen">
-      <Sidebar />
-      <main className="flex-1 lg:ml-64 p-6">
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-              <Wallet size={24} className="text-primary" /> Wallet Ledger
-            </h1>
-            <p className="text-dark-muted text-sm mt-1">Platform-wide transaction history</p>
-          </div>
+    <DashboardLayout>
+      <TablePageLayout
+        title="Wallet Ledger"
+        subtitle="Platform-wide transaction history"
+        breadcrumbs={[{ label: 'SuperAdmin Dashboard', href: '/dashboard' }, { label: 'Wallet Ledger' }]}
+        actionSlot={
           <button className="btn-primary flex items-center gap-2" onClick={() => setShowAdjust(true)}>
             <CreditCard size={16} /> Manual Adjust
           </button>
-        </div>
-
+        }
+      >
         <DataTable
+          loading={isLoading}
           columns={columns}
           data={txns}
+          onRowClick={(row) => setSelectedTxn(row)}
         />
+      </TablePageLayout>
+
+      <TableRowDetailsModal
+        open={Boolean(selectedTxn)}
+        title="Wallet Transaction Details"
+        onClose={() => setSelectedTxn(null)}
+        rows={selectedTxn ? [
+          { label: 'ID', value: selectedTxn.id },
+          { label: 'Wallet', value: selectedTxn.wallet },
+          { label: 'Type', value: selectedTxn.type },
+          { label: 'Amount', value: `PHP ${Number(selectedTxn.amount || 0).toLocaleString()}` },
+          { label: 'Balance After', value: `PHP ${Number(selectedTxn.balance_after || 0).toLocaleString()}` },
+          { label: 'Description', value: selectedTxn.description || 'N/A' },
+          { label: 'Date', value: new Date(selectedTxn.created_at).toLocaleString() },
+        ] : []}
+      />
 
         {/* Adjust Modal */}
         {showAdjust && (
@@ -144,8 +160,7 @@ export default function WalletLedgerPage() {
             </div>
           </div>
         )}
-      </main>
-    </div>
+    </DashboardLayout>
   );
 }
 
