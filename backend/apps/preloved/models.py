@@ -15,6 +15,11 @@ class PrelovedCategory(BaseModel):
 
 
 class PrelovedItem(BaseModel):
+    class ApprovalStatus(models.TextChoices):
+        PENDING = 'PENDING', 'Pending'
+        APPROVED = 'APPROVED', 'Approved'
+        REJECTED = 'REJECTED', 'Rejected'
+
     class Condition(models.TextChoices):
         NEW = 'NEW', 'New'
         LIKE_NEW = 'LIKE_NEW', 'Like New'
@@ -37,8 +42,15 @@ class PrelovedItem(BaseModel):
     final_price = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     is_negotiable = models.BooleanField(default=False)
     availability_status = models.CharField(max_length=20, choices=AvailabilityStatus.choices, default=AvailabilityStatus.AVAILABLE)
+    stock_qty = models.IntegerField(default=1)
     delivery_available = models.BooleanField(default=True)
     images = models.JSONField(default=list, blank=True)
+    approval_status = models.CharField(
+        max_length=20,
+        choices=ApprovalStatus.choices,
+        default=ApprovalStatus.PENDING,
+        db_index=True,
+    )
 
     class Meta:
         db_table = 'preloved_items'
