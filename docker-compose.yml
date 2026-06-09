@@ -1,3 +1,5 @@
+version: '3.9'
+
 services:
 
   # ─── Infrastructure ───────────────────────────────
@@ -7,6 +9,7 @@ services:
       POSTGRES_USER: ${DB_USER:-rapex_user}
       POSTGRES_PASSWORD: ${DB_PASSWORD:-rapex_password}
       POSTGRES_DB: ${DB_NAME:-rapex_db}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8"
     volumes:
       - postgres-data:/var/lib/postgresql/data
     ports:
@@ -16,6 +19,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    restart: unless-stopped
 
   pgbouncer:
     image: edoburu/pgbouncer:latest
@@ -28,6 +32,7 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    restart: unless-stopped
 
   redis:
     image: redis:7.4-alpine
@@ -41,6 +46,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    restart: unless-stopped
 
   minio:
     image: minio/minio:latest
@@ -53,15 +59,17 @@ services:
     ports:
       - "9000:9000"
       - "9001:9001"
+    restart: unless-stopped
 
   # ─── Django Backend ───────────────────────────────
   backend:
     build: ./backend
     command: >
       sh -c "python manage.py migrate --noinput &&
+             python manage.py ensure_storage_bucket &&
              python manage.py load_initial_settings &&
-             python manage.py seed &&
-             gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 4 --reload"
+             if [ \"${AUTO_SEED:-false}\" = \"true\" ]; then python manage.py seed; fi &&
+             gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 4"
     volumes:
       - ./backend:/app
       - static-files:/app/staticfiles
@@ -73,6 +81,9 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      minio:
+        condition: service_started
+    restart: unless-stopped
 
   daphne:
     build: ./backend
@@ -85,6 +96,7 @@ services:
     depends_on:
       redis:
         condition: service_healthy
+    restart: unless-stopped
 
   celery-worker:
     build: ./backend
@@ -97,6 +109,7 @@ services:
         condition: service_healthy
       postgres:
         condition: service_healthy
+    restart: unless-stopped
 
   celery-beat:
     build: ./backend
@@ -109,6 +122,7 @@ services:
         condition: service_healthy
       postgres:
         condition: service_healthy
+    restart: unless-stopped
 
   # ─── Next.js Frontends ────────────────────────────
   frontend-user:
@@ -118,15 +132,18 @@ services:
     command: npm run dev
     volumes:
       - ./frontend/user:/app
-      - ./frontend/shared:/app/shared
+      - ./frontend/shared:/shared
       - /app/node_modules
+      - /app/.next
     environment:
       NEXT_PUBLIC_API_URL: http://localhost/api/v1
       NEXT_PUBLIC_GOOGLE_CLIENT_ID: ${NEXT_PUBLIC_GOOGLE_CLIENT_ID}
+      NODE_ENV: development
     ports:
       - "3001:3001"
     depends_on:
       - backend
+    restart: unless-stopped
 
   frontend-merchant:
     build:
@@ -135,15 +152,18 @@ services:
     command: npm run dev
     volumes:
       - ./frontend/merchant:/app
-      - ./frontend/shared:/app/shared
+      - ./frontend/shared:/shared
       - /app/node_modules
+      - /app/.next
     environment:
       NEXT_PUBLIC_API_URL: http://localhost/api/v1
       NEXT_PUBLIC_GOOGLE_CLIENT_ID: ${NEXT_PUBLIC_GOOGLE_CLIENT_ID}
+      NODE_ENV: development
     ports:
       - "3002:3002"
     depends_on:
       - backend
+    restart: unless-stopped
 
   frontend-admin:
     build:
@@ -152,15 +172,18 @@ services:
     command: npm run dev
     volumes:
       - ./frontend/admin:/app
-      - ./frontend/shared:/app/shared
+      - ./frontend/shared:/shared
       - /app/node_modules
+      - /app/.next
     environment:
       NEXT_PUBLIC_API_URL: http://localhost/api/v1
       NEXT_PUBLIC_GOOGLE_CLIENT_ID: ${NEXT_PUBLIC_GOOGLE_CLIENT_ID}
+      NODE_ENV: development
     ports:
       - "3003:3003"
     depends_on:
       - backend
+    restart: unless-stopped
 
   frontend-superadmin:
     build:
@@ -169,15 +192,18 @@ services:
     command: npm run dev
     volumes:
       - ./frontend/superadmin:/app
-      - ./frontend/shared:/app/shared
+      - ./frontend/shared:/shared
       - /app/node_modules
+      - /app/.next
     environment:
       NEXT_PUBLIC_API_URL: http://localhost/api/v1
       NEXT_PUBLIC_GOOGLE_CLIENT_ID: ${NEXT_PUBLIC_GOOGLE_CLIENT_ID}
+      NODE_ENV: development
     ports:
       - "3004:3004"
     depends_on:
       - backend
+    restart: unless-stopped
 
   frontend-rider:
     build:
@@ -186,15 +212,18 @@ services:
     command: npm run dev
     volumes:
       - ./frontend/rider:/app
-      - ./frontend/shared:/app/shared
+      - ./frontend/shared:/shared
       - /app/node_modules
+      - /app/.next
     environment:
       NEXT_PUBLIC_API_URL: http://localhost/api/v1
       NEXT_PUBLIC_GOOGLE_CLIENT_ID: ${NEXT_PUBLIC_GOOGLE_CLIENT_ID}
+      NODE_ENV: development
     ports:
       - "3005:3005"
     depends_on:
       - backend
+    restart: unless-stopped
 
   # ─── Nginx ────────────────────────────────────────
   nginx:
@@ -207,6 +236,7 @@ services:
     depends_on:
       - backend
       - daphne
+    restart: unless-stopped
 
 volumes:
   postgres-data:
