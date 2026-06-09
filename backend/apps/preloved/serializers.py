@@ -1,5 +1,6 @@
 """RAPEX Pre-Loved Module — Serializers"""
 from rest_framework import serializers
+from apps.core.storage import normalize_storage_path, resolve_storage_values
 from .models import PrelovedCategory, PrelovedItem, PrelovedOffer
 
 
@@ -16,10 +17,22 @@ class PrelovedItemSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'store', 'category', 'title', 'description', 'condition',
             'base_price', 'markup_rate', 'final_price', 'is_negotiable',
-            'availability_status', 'delivery_available', 'images',
+            'availability_status', 'stock_qty', 'delivery_available', 'images', 'approval_status',
             'created_at', 'updated_at',
         ]
-        read_only_fields = ['id', 'final_price', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'final_price', 'approval_status', 'created_at', 'updated_at']
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        request = self.context.get('request')
+        data['images'] = resolve_storage_values(data.get('images') or [], request=request)
+        return data
+
+    def validate_images(self, value):
+        normalized = [normalize_storage_path(item) for item in (value or []) if item]
+        if len(normalized) < 3:
+            raise serializers.ValidationError('At least 3 product images are required.')
+        return normalized
 
 
 class PrelovedOfferSerializer(serializers.ModelSerializer):
