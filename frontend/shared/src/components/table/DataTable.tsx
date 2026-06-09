@@ -29,6 +29,7 @@ interface DataTableProps<T extends object> {
   columns: TableColumn<T>[];
   data: T[];
   rowKey?: keyof T | ((row: T, index: number) => string);
+  onRowClick?: (row: T) => void;
   title?: string;
   subtitle?: string;
   loading?: boolean;
@@ -83,6 +84,7 @@ export function DataTable<T extends object>({
   columns,
   data,
   rowKey,
+  onRowClick,
   title,
   subtitle,
   loading = false,
@@ -110,12 +112,14 @@ export function DataTable<T extends object>({
   });
 
   const debouncedSearch = useDebouncedValue(searchText, 250);
+  const resolvedTabs: TabOption[] = tabs && tabs.length ? tabs : [{ value: 'all', label: 'All', count: data.length }];
+  const hasCustomTabFiltering = Boolean(tabs && tabs.length && filterByTab);
 
   const visibleColumns = useMemo(() => columns.filter((column) => visibleMap[column.key] !== false), [columns, visibleMap]);
 
   const filteredRows = useMemo(() => {
     return data.filter((row) => {
-      if (tabs && filterByTab && !filterByTab(row, activeTab)) {
+      if (hasCustomTabFiltering && filterByTab && !filterByTab(row, activeTab)) {
         return false;
       }
 
@@ -133,7 +137,7 @@ export function DataTable<T extends object>({
 
       return matchesQuery(searchSource, debouncedSearch);
     });
-  }, [activeTab, columns, data, debouncedSearch, filterByTab, tabs]);
+  }, [activeTab, columns, data, debouncedSearch, filterByTab, hasCustomTabFiltering]);
 
   const sortedRows = useMemo(() => {
     if (!sort) {
@@ -241,16 +245,16 @@ export function DataTable<T extends object>({
   }
 
   return (
-    <div className={cn('overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm', className)}>
+    <div className={cn('space-y-3', className)}>
       {(title || subtitle) ? (
-        <div className="border-b border-gray-200 px-5 py-4">
+        <div className="rounded-xl border border-gray-200 bg-white px-5 py-4 shadow-sm">
           {title ? <h3 className="text-base font-semibold text-gray-900">{title}</h3> : null}
           {subtitle ? <p className="mt-0.5 text-sm text-gray-500">{subtitle}</p> : null}
         </div>
       ) : null}
 
-      <div className="space-y-3 border-b border-gray-200 px-4 py-3">
-        {tabs && tabs.length ? <FilterTabs tabs={tabs} value={activeTab} onChange={(tab) => onTabChange?.(tab)} /> : null}
+      <div className="space-y-3 rounded-xl border border-gray-200 bg-white px-4 py-3 shadow-sm">
+        {resolvedTabs.length ? <FilterTabs tabs={resolvedTabs} value={activeTab} onChange={(tab) => onTabChange?.(tab)} /> : null}
         <div className="flex flex-wrap items-center justify-between gap-3">
           <SearchBar
             value={searchText}
@@ -276,10 +280,11 @@ export function DataTable<T extends object>({
         </div>
       </div>
 
-      <div className="overflow-x-auto">
-        <table className="min-w-full">
-          <thead>
-            <tr className="border-b border-gray-200 bg-gray-50/80">
+      <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+        <div className="overflow-x-auto">
+          <table className="min-w-full">
+            <thead>
+              <tr className="border-b border-gray-200 bg-gray-50/70">
               {selectable ? (
                 <th className="w-10 px-3 py-2.5 text-left">
                   <input
@@ -291,14 +296,15 @@ export function DataTable<T extends object>({
                 </th>
               ) : null}
               {visibleColumns.map((column) => {
-                const sortable = column.sortable !== false;
+                const isActionColumn = column.key.toLowerCase() === 'action' || column.key.toLowerCase() === 'actions';
+                const sortable = !isActionColumn && column.sortable !== false;
                 const isSorted = sort?.key === column.key;
                 const icon = !sortable ? null : isSorted ? (sort?.direction === 'asc' ? <ArrowUp size={14} /> : <ArrowDown size={14} />) : <ArrowUpDown size={14} />;
 
                 return (
                   <th
                     key={column.key}
-                    className={cn('px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-500', column.headerClassName)}
+                    className={cn('px-4 py-2.5 text-left text-xs font-semibold text-gray-700', column.headerClassName)}
                   >
                     <button
                       type="button"
@@ -311,71 +317,88 @@ export function DataTable<T extends object>({
                   </th>
                 );
               })}
-              {getRowActions ? <th className="w-14 px-4 py-2.5 text-right text-xs font-semibold uppercase tracking-wide text-gray-500">Action</th> : null}
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100">
-            {loading ? (
-              <tr>
-                <td colSpan={visibleColumns.length + (selectable ? 1 : 0) + (getRowActions ? 1 : 0)} className="px-4 py-8 text-center text-sm text-gray-500">
-                  Loading data...
-                </td>
+              {getRowActions ? <th className="w-14 px-4 py-2.5 text-right text-xs font-semibold text-gray-700">Actions</th> : null}
               </tr>
-            ) : paginatedRows.length ? (
-              paginatedRows.map((row, index) => {
-                const rowId = getRowId(row, index);
-                const rowActions = getRowActions?.(row) ?? [];
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {loading ? (
+                <tr>
+                  <td colSpan={visibleColumns.length + (selectable ? 1 : 0) + (getRowActions ? 1 : 0)} className="px-4 py-8 text-center text-sm text-gray-500">
+                    Loading data...
+                  </td>
+                </tr>
+              ) : paginatedRows.length ? (
+                paginatedRows.map((row, index) => {
+                  const rowId = getRowId(row, index);
+                  const rowActions = getRowActions?.(row) ?? [];
+                  const clickable = Boolean(onRowClick);
 
-                return (
-                  <tr key={rowId} className="hover:bg-gray-50/60">
-                    {selectable ? (
-                      <td className="px-3 py-2.5">
-                        <input
-                          type="checkbox"
-                          checked={selectedRowIds.has(rowId)}
-                          onChange={() => toggleRow(rowId)}
-                          className="accent-primary-500"
-                        />
-                      </td>
-                    ) : null}
-                    {visibleColumns.map((column) => (
-                      <td key={column.key} className={cn('px-4 py-3 text-sm text-gray-700', column.cellClassName)}>
-                        {column.render ? column.render(row) : String(getRawValue(row, column.key) ?? '-')}
-                      </td>
-                    ))}
-                    {getRowActions ? (
-                      <td className="px-4 py-2 text-right">
-                        {rowActions.length ? <ActionMenu items={rowActions} /> : null}
-                      </td>
-                    ) : null}
-                  </tr>
-                );
-              })
-            ) : (
-              <tr>
-                <td colSpan={visibleColumns.length + (selectable ? 1 : 0) + (getRowActions ? 1 : 0)} className="px-4 py-8 text-center text-sm text-gray-500">
-                  No data available.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+                  return (
+                    <tr
+                      key={rowId}
+                      className={cn('hover:bg-gray-50/80', clickable ? 'cursor-pointer' : undefined)}
+                      onClick={(event) => {
+                        if (!onRowClick) {
+                          return;
+                        }
+
+                        const target = event.target as HTMLElement;
+                        if (target.closest('button,a,input,[role="menuitem"],[data-row-action="true"]')) {
+                          return;
+                        }
+
+                        onRowClick(row);
+                      }}
+                    >
+                      {selectable ? (
+                        <td className="px-3 py-2.5">
+                          <input
+                            type="checkbox"
+                            checked={selectedRowIds.has(rowId)}
+                            onChange={() => toggleRow(rowId)}
+                            className="accent-primary-500"
+                          />
+                        </td>
+                      ) : null}
+                      {visibleColumns.map((column) => (
+                        <td key={column.key} className={cn('px-4 py-3 text-sm text-gray-700', column.cellClassName)}>
+                          {column.render ? column.render(row) : String(getRawValue(row, column.key) ?? '-')}
+                        </td>
+                      ))}
+                      {getRowActions ? (
+                        <td className="px-4 py-2 text-right">
+                          {rowActions.length ? <ActionMenu items={rowActions} /> : null}
+                        </td>
+                      ) : null}
+                    </tr>
+                  );
+                })
+              ) : (
+                <tr>
+                  <td colSpan={visibleColumns.length + (selectable ? 1 : 0) + (getRowActions ? 1 : 0)} className="px-4 py-8 text-center text-sm text-gray-500">
+                    No data available.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        <Pagination
+          page={safePage}
+          totalPages={totalPages}
+          rowsPerPage={rowsPerPage}
+          rowsPerPageOptions={rowsPerPageOptions}
+          totalItems={sortedRows.length}
+          showingFrom={sortedRows.length ? (safePage - 1) * rowsPerPage + 1 : 0}
+          showingTo={Math.min(safePage * rowsPerPage, sortedRows.length)}
+          onPageChange={setPage}
+          onRowsPerPageChange={(rows) => {
+            setRowsPerPage(rows);
+            setPage(1);
+          }}
+        />
       </div>
-
-      <Pagination
-        page={safePage}
-        totalPages={totalPages}
-        rowsPerPage={rowsPerPage}
-        rowsPerPageOptions={rowsPerPageOptions}
-        totalItems={sortedRows.length}
-        showingFrom={sortedRows.length ? (safePage - 1) * rowsPerPage + 1 : 0}
-        showingTo={Math.min(safePage * rowsPerPage, sortedRows.length)}
-        onPageChange={setPage}
-        onRowsPerPageChange={(rows) => {
-          setRowsPerPage(rows);
-          setPage(1);
-        }}
-      />
     </div>
   );
 }
