@@ -150,7 +150,7 @@ This pattern enables:
 | **WebSockets** | Django Channels + Redis for real-time: order status, live rider tracking, chat messaging |
 | **Web Server** | Gunicorn (multiple workers) behind Nginx for Django; Next.js served separately |
 | **Next.js Optimization** | SSG for static pages, ISR for product listings, CSR for real-time dashboards |
-| **File Storage** | MinIO on VPS for images and KYC documents; CDN layer via Cloudflare for fast asset delivery |
+| **File Storage** | MinIO on VPS for images and KYC documents with enforced owner-first taxonomy (`merchant/{id}`, `rider/{id}`, `user/{id}`) and centralized path generation via backend storage helpers; CDN layer via Cloudflare for fast asset delivery |
 | **SSL** | Let's Encrypt SSL via Nginx for all subdomains |
 | **Environment Config** | `.env` per environment (development, staging, production) |
 | **Monitoring** | Uptime monitoring + error logging (Sentry or self-hosted equivalent) |
