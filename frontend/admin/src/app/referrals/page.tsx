@@ -6,6 +6,7 @@ import DashboardLayout from '@/components/DashboardLayout';
 import DataTable from '@/components/DataTable';
 import StatusBadge from '@/components/StatusBadge';
 import api from '@/lib/api';
+import { TablePageLayout, TableRowDetailsModal } from '@shared/components/table';
 
 interface ReferralRow {
   code: string;
@@ -16,6 +17,7 @@ interface ReferralRow {
 
 export default function ReferralsPage() {
   const [activeTab, setActiveTab] = useState<'users' | 'riders'>('users');
+  const [selectedRow, setSelectedRow] = useState<ReferralRow | null>(null);
 
   const { data: userRefs = [], isLoading: loadingUsers } = useQuery<ReferralRow[]>({
     queryKey: ['admin-referrals-users'],
@@ -36,35 +38,43 @@ export default function ReferralsPage() {
     { key: 'points_credited', label: 'Points', render: (r: ReferralRow) => r.points_credited || 0 },
   ];
 
+  const tableData = activeTab === 'users' ? userRefs : riderRefs;
+  const loading = activeTab === 'users' ? loadingUsers : loadingRiders;
+
   return (
     <DashboardLayout>
-        <div className="mb-6">
-          <h1 className="text-2xl font-bold text-gray-900">Referrals</h1>
-          <p className="text-gray-500 text-sm mt-1">User and rider referral tracking</p>
-        </div>
+      <TablePageLayout
+        title="Referrals"
+        subtitle="User and rider referral tracking"
+        breadcrumbs={[{ label: 'Admin Dashboard', href: '/dashboard' }, { label: 'Referrals' }]}
+      >
+        <DataTable
+          columns={columns}
+          data={tableData}
+          loading={loading}
+          onRowClick={(row) => setSelectedRow(row)}
+          tabs={[
+            { value: 'users', label: 'User Referrals', count: userRefs.length },
+            { value: 'riders', label: 'Rider Referrals', count: riderRefs.length },
+          ]}
+          activeTab={activeTab}
+          onTabChange={(value) => setActiveTab(value as 'users' | 'riders')}
+          filterByTab={() => true}
+        />
+      </TablePageLayout>
 
-        <div className="flex gap-2 mb-6">
-          {(['users', 'riders'] as const).map((tab) => (
-            <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                activeTab === tab
-                  ? 'bg-primary text-white'
-                  : 'bg-white text-gray-500 hover:text-gray-900 border border-gray-200'
-              }`}
-            >
-              {tab === 'users' ? 'User Referrals' : 'Rider Referrals'}
-            </button>
-          ))}
-        </div>
-
-        {activeTab === 'users' && (
-          <DataTable columns={columns} data={userRefs} />
-        )}
-        {activeTab === 'riders' && (
-          <DataTable columns={columns} data={riderRefs} />
-        )}
+      <TableRowDetailsModal
+        open={Boolean(selectedRow)}
+        title="Referral Details"
+        onClose={() => setSelectedRow(null)}
+        rows={selectedRow ? [
+          { label: 'Referral Code', value: selectedRow.code },
+          { label: 'Referred ID', value: selectedRow.referred_id },
+          { label: 'Status', value: selectedRow.status },
+          { label: 'Points', value: String(selectedRow.points_credited || 0) },
+          { label: 'Type', value: activeTab === 'users' ? 'User Referral' : 'Rider Referral' },
+        ] : []}
+      />
     </DashboardLayout>
   );
 }
