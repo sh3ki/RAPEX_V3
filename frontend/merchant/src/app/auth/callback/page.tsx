@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useAuthStore } from '@/store/authStore';
@@ -10,6 +10,22 @@ import { getPostLoginRoute } from '@/lib/authRouting';
 const t = authText('en');
 
 export default function AuthCallbackPage() {
+  return (
+    <Suspense
+      fallback={(
+        <div className="min-h-screen flex items-center justify-center bg-gray-50 p-6">
+          <div className="w-full max-w-md bg-white rounded-2xl shadow-sm border border-gray-200 p-8 space-y-4 text-center">
+            <p className="text-sm text-gray-600">Verifying your magic link...</p>
+          </div>
+        </div>
+      )}
+    >
+      <AuthCallbackContent />
+    </Suspense>
+  );
+}
+
+function AuthCallbackContent() {
   const router = useRouter();
   const params = useSearchParams();
   const verifyMagicLink = useAuthStore((s) => s.verifyMagicLink);
