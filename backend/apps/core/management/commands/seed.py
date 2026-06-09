@@ -1,9 +1,9 @@
-﻿"""
+"""
 RAPEX Database Seeder
 Seeds the database with test data:
   - 1 SuperAdmin
   - 5 Admins (varied sub-roles)
-  - 10 Merchants (with stores & products)
+    - 0 Merchants (intentionally not seeded)
   - 20 Riders (with wallets)
   - 25 Users (with wallets, loyalty points, referral codes)
   - Platform settings, markup tiers, commission tiers
@@ -13,10 +13,11 @@ Usage: python manage.py seed [--flush]
 """
 import random
 import string
+import importlib
 from decimal import Decimal
 
 from django.core.management import call_command
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 from django.utils import timezone
 
@@ -42,34 +43,35 @@ class Command(BaseCommand):
         with transaction.atomic():
             self._seed_platform_settings()
             self._seed_delivery_fare_configs()
+            self._seed_merchant_onboarding_catalog()
             sa = self._seed_superadmin()
             admins = self._seed_admins()
-            merchants = self._seed_merchants()
+            merchants = []
             riders = self._seed_riders()
             users = self._seed_users()
 
         self.stdout.write('')
-        self.stdout.write(self.style.SUCCESS('ΓòÉ' * 55))
+        self.stdout.write(self.style.SUCCESS('═' * 55))
         self.stdout.write(self.style.SUCCESS('  RAPEX SEED COMPLETE'))
-        self.stdout.write(self.style.SUCCESS('ΓòÉ' * 55))
+        self.stdout.write(self.style.SUCCESS('═' * 55))
         self.stdout.write(f'  SuperAdmin : 1   (phone: 09000000001)')
         self.stdout.write(f'  Admins     : {len(admins)}   (phones: 09100000001-{len(admins):03d})')
-        self.stdout.write(f'  Merchants  : {len(merchants)}  (phones: 09200000001-{len(merchants):03d})')
+        self.stdout.write('  Merchants  : 0  (merchant seeding disabled by policy)')
         self.stdout.write(f'  Riders     : {len(riders)}  (phones: 09300000001-{len(riders):03d})')
         self.stdout.write(f'  Users      : {len(users)}  (phones: 09400000001-{len(users):03d})')
         self.stdout.write(f'  Password   : {PASSWORD}')
-        self.stdout.write(self.style.SUCCESS('ΓòÉ' * 55))
+        self.stdout.write(self.style.SUCCESS('═' * 55))
 
-    # ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    # ────────────────────────────────────────────────────
     # Platform Settings
-    # ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    # ────────────────────────────────────────────────────
     def _seed_platform_settings(self):
         self.stdout.write('Loading platform settings...')
         call_command('load_initial_settings')
 
-    # ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    # ────────────────────────────────────────────────────
     # Delivery Fare Configs
-    # ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    # ────────────────────────────────────────────────────
     def _seed_delivery_fare_configs(self):
         from apps.delivery.models import DeliveryFareConfig
 
@@ -94,9 +96,124 @@ class Command(BaseCommand):
                 count += 1
         self.stdout.write(f'  Delivery fare configs: {count} created')
 
-    # ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    def _seed_merchant_onboarding_catalog(self):
+        from apps.merchant.models import MerchantBusinessCategory, MerchantBusinessType, MerchantCountryCode
+
+        try:
+            pycountry = importlib.import_module('pycountry')
+            phonenumbers = importlib.import_module('phonenumbers')
+            phonenumberutil = importlib.import_module('phonenumbers.phonenumberutil')
+        except ModuleNotFoundError as exc:
+            raise CommandError(
+                'Missing dependency for country-code seeding. Install backend requirements to include pycountry and phonenumberslite.'
+            ) from exc
+
+        PhoneMetadata = getattr(phonenumbers, 'PhoneMetadata')
+        SUPPORTED_REGIONS = getattr(phonenumberutil, 'SUPPORTED_REGIONS')
+        country_code_for_region = getattr(phonenumberutil, 'country_code_for_region')
+
+        catalog = {
+            'Food and Beverage': [
+                'Carinderia',
+                'Restaurant',
+                'Cafe',
+                'Milk Tea Shop',
+                'Bakery',
+                'Food Stall',
+            ],
+            'Grocery and Retail': [
+                'Sari-sari Store',
+                'Mini Grocery',
+                'Convenience Store',
+                'Pharmacy',
+                'Hardware Store',
+                'General Merchandise',
+            ],
+            'Fresh Market': [
+                'Vegetable Vendor',
+                'Fruit Vendor',
+                'Seafood Vendor',
+                'Meat Vendor',
+                'Egg Supplier',
+            ],
+            'Preloved': [
+                'Ukay-ukay',
+                'Preloved Electronics',
+                'Furniture Reseller',
+                'Books and Media',
+                'Mixed Preloved Goods',
+            ],
+        }
+
+        country_codes = []
+        for region in sorted(SUPPORTED_REGIONS):
+            country = pycountry.countries.get(alpha_2=region)
+            if not country:
+                continue
+
+            dial_code = country_code_for_region(region)
+            if not dial_code:
+                continue
+
+            metadata = PhoneMetadata.metadata_for_region(region, None)
+            possible_lengths = list(getattr(getattr(metadata, 'mobile', None), 'possible_length', []) or [])
+            if not possible_lengths:
+                possible_lengths = list(getattr(getattr(metadata, 'fixed_line', None), 'possible_length', []) or [])
+
+            max_digits = max(possible_lengths) if possible_lengths else 15
+            max_digits = max(6, min(int(max_digits), 15))
+
+            country_codes.append({
+                'country_name': country.name,
+                'country_code': f'+{dial_code}',
+                'country_flag_emoji': region,
+                'max_digits': max_digits,
+                'is_default': region == 'PH',
+            })
+
+        created_categories = 0
+        created_types = 0
+        created_country_codes = 0
+        for category_name, business_types in catalog.items():
+            category, category_created = MerchantBusinessCategory.objects.get_or_create(
+                name=category_name,
+                defaults={'is_active': True},
+            )
+            if category_created:
+                created_categories += 1
+
+            for business_type_name in business_types:
+                _, type_created = MerchantBusinessType.objects.get_or_create(
+                    category=category,
+                    name=business_type_name,
+                    defaults={'is_active': True},
+                )
+                if type_created:
+                    created_types += 1
+
+        MerchantCountryCode.objects.update(is_default=False)
+        for country in country_codes:
+            _, country_created = MerchantCountryCode.objects.update_or_create(
+                country_name=country['country_name'],
+                defaults={
+                    'country_code': country['country_code'],
+                    'country_flag_emoji': country['country_flag_emoji'],
+                    'max_digits': country['max_digits'],
+                    'is_default': country['is_default'],
+                    'is_active': True,
+                },
+            )
+            if country_created:
+                created_country_codes += 1
+
+        self.stdout.write(
+            f'  Merchant onboarding catalog: {created_categories} categories, {created_types} types, '
+            f'{created_country_codes} country codes created'
+        )
+
+    # ────────────────────────────────────────────────────
     # SuperAdmin
-    # ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    # ────────────────────────────────────────────────────
     def _seed_superadmin(self):
         from apps.accounts.models import CustomUser, SuperAdminProfile
 
@@ -107,7 +224,7 @@ class Command(BaseCommand):
             if not user.email:
                 user.email = email
                 user.save(update_fields=['email'])
-            self.stdout.write(f'  SuperAdmin {phone} already exists ΓÇö skipping')
+            self.stdout.write(f'  SuperAdmin {phone} already exists — skipping')
             return user
 
         user = CustomUser.objects.create_superuser(phone=phone, password=PASSWORD)
@@ -117,9 +234,9 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS(f'  SuperAdmin created: {phone} / {email}'))
         return user
 
-    # ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    # ────────────────────────────────────────────────────
     # Admins
-    # ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    # ────────────────────────────────────────────────────
     def _seed_admins(self):
         from apps.accounts.models import AdminProfile, CustomUser
 
@@ -154,12 +271,19 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS(f'  Admins created: {len(admins)}'))
         return admins
 
-    # ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    # ────────────────────────────────────────────────────
     # Merchants (10)
-    # ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    # ────────────────────────────────────────────────────
     def _seed_merchants(self):
         from apps.accounts.models import CustomUser, MerchantProfile
-        from apps.merchant.models import MerchantStore
+        from apps.merchant.models import (
+            MerchantBusinessCategory,
+            MerchantBusinessProfile,
+            MerchantBusinessType,
+            MerchantLocation,
+            MerchantOnboardingState,
+            MerchantStore,
+        )
 
         merchant_data = [
             ('Aling Nena\'s Sari-Sari', 'SHOP', 14.5995, 120.9842),
@@ -184,6 +308,13 @@ class Command(BaseCommand):
         ]
 
         merchants = []
+        category_lookup = {
+            'SHOP': 'Grocery and Retail',
+            'FRESH_MARKET': 'Fresh Market',
+            'READY_TO_EAT': 'Food and Beverage',
+            'PRELOVED': 'Preloved',
+        }
+
         for i in range(10):
             phone = f'092000000{i + 1:02d}'
             if CustomUser.objects.filter(phone=phone).exists():
@@ -196,6 +327,12 @@ class Command(BaseCommand):
                 phone=phone, password=PASSWORD, role='MERCHANT',
                 email=f'merchant{i + 1}@rapex.ph', is_verified=True,
             )
+
+            is_pending_seed = i == 0
+            user.status = 'PENDING' if is_pending_seed else 'APPROVED'
+            user.wizard_completed = True
+            user.save(update_fields=['status', 'wizard_completed'])
+
             profile = MerchantProfile.objects.create(
                 user=user,
                 full_name=f'{first_names[i]} {last_names[i]}',
@@ -204,7 +341,59 @@ class Command(BaseCommand):
                 business_address=f'{100 + i} Sample St, Manila, PH',
                 business_lat=Decimal(str(lat)),
                 business_lng=Decimal(str(lng)),
-                kyc_status='APPROVED',
+                kyc_status='PENDING' if is_pending_seed else 'APPROVED',
+                status='PENDING' if is_pending_seed else 'APPROVED',
+                wizard_completed=True,
+                onboarding_submitted_at=timezone.now(),
+            )
+
+            business_profile, _ = MerchantBusinessProfile.objects.get_or_create(
+                merchant=profile,
+                defaults={
+                    'business_name': biz_name,
+                    'registration_type': random.choice(
+                        [
+                            MerchantBusinessProfile.RegistrationType.UNREGISTERED,
+                            MerchantBusinessProfile.RegistrationType.REGISTERED_NON_VAT,
+                            MerchantBusinessProfile.RegistrationType.REGISTERED_VAT,
+                        ]
+                    ),
+                },
+            )
+            category_name = category_lookup.get(primary_store_type, 'Grocery and Retail')
+            category = MerchantBusinessCategory.objects.filter(name=category_name).first()
+            if category:
+                business_profile.categories.add(category)
+                types = list(MerchantBusinessType.objects.filter(category=category)[:2])
+                if types:
+                    business_profile.business_types.add(*types)
+
+            MerchantLocation.objects.get_or_create(
+                merchant=profile,
+                defaults={
+                    'house_number': str(100 + i),
+                    'street_name': 'Sample Street',
+                    'barangay': 'Barangay 1',
+                    'city_municipality': 'Manila',
+                    'province': 'Metro Manila',
+                    'zip_code': '1000',
+                    'latitude': Decimal(str(lat)),
+                    'longitude': Decimal(str(lng)),
+                },
+            )
+
+            MerchantOnboardingState.objects.get_or_create(
+                merchant=profile,
+                defaults={
+                    'current_step': 5,
+                    'is_submitted': True,
+                    'email_verified': True,
+                    'phone_verified': True,
+                    'terms_accepted': True,
+                    'privacy_accepted': True,
+                    'submitted_at': timezone.now(),
+                    'can_resubmit': False,
+                },
             )
 
             # Create primary store
@@ -373,9 +562,9 @@ class Command(BaseCommand):
                     is_negotiable=negotiable,
                 )
 
-    # ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    # ────────────────────────────────────────────────────
     # Riders (20)
-    # ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    # ────────────────────────────────────────────────────
     def _seed_riders(self):
         from apps.accounts.models import CustomUser, RiderProfile
         from apps.wallet.models import RapexWallet, WalletTransaction
@@ -424,7 +613,7 @@ class Command(BaseCommand):
                 current_lng=Decimal('120.9842') + Decimal(str(random.uniform(-0.005, 0.005))) if i < 10 else None,
             )
 
-            # Create wallet with Γé▒500 initial load
+            # Create wallet with ₱500 initial load
             wallet = RapexWallet.objects.create(
                 owner_id=user.id, owner_type='RIDER',
                 balance=Decimal('500.00'),
@@ -451,9 +640,9 @@ class Command(BaseCommand):
         }
         return random.choice(models.get(vtype, ['Unknown']))
 
-    # ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    # ────────────────────────────────────────────────────
     # Users (25)
-    # ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    # ────────────────────────────────────────────────────
     def _seed_users(self):
         from apps.accounts.models import CustomUser, UserProfile
         from apps.referrals.models import ReferralCode
@@ -518,4 +707,3 @@ class Command(BaseCommand):
 
         self.stdout.write(self.style.SUCCESS(f'  Users created: {len(users)}'))
         return users
-
