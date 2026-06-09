@@ -1,24 +1,40 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import DashboardLayout from '@/components/DashboardLayout';
 import api from '@/lib/api';
 import { Plus, Package } from 'lucide-react';
+import { DataTable, TablePageLayout, TableRowDetailsModal } from '@shared/components/table';
+import { Button, Dropdown, Input } from '@shared/components/ui';
+import type { SelectOption } from '@shared/types';
 
 interface StoreRow { id: string; store_type: string; display_name: string; }
 interface ProductRow { id: string; name: string; base_price: string; final_price: string; is_available: boolean; }
 
+const AVAILABILITY_OPTIONS: SelectOption[] = [
+  { value: 'true', label: 'Available', description: 'Visible and purchasable by customers.' },
+  { value: 'false', label: 'Unavailable', description: 'Hidden from active purchase flows.' },
+];
+
 export default function ProductsPage() {
   const [selectedStore, setSelectedStore] = useState<StoreRow | null>(null);
+  const [selectedProduct, setSelectedProduct] = useState<ProductRow | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [form, setForm] = useState({ name: '', description: '', base_price: '', is_available: true });
+  const [createError, setCreateError] = useState('');
   const queryClient = useQueryClient();
 
   const { data: stores = [] } = useQuery<StoreRow[]>({
     queryKey: ['merchant-stores'],
     queryFn: () => api.get('/merchant/stores/').then((r) => r.data),
   });
+
+  useEffect(() => {
+    if (!selectedStore && stores.length > 0) {
+      setSelectedStore(stores[0]);
+    }
+  }, [selectedStore, stores]);
 
   // Determine the correct product endpoint based on store type
   const getProductUrl = (store: StoreRow) => {
@@ -42,10 +58,41 @@ export default function ProductsPage() {
     enabled: !!selectedStore,
   });
 
+  const getCreateErrorMessage = (error: unknown) => {
+    if (!error || typeof error !== 'object') {
+      return null;
+    }
+
+    const maybeError = error as {
+      message?: string;
+      response?: { data?: { message?: string; detail?: string } };
+    };
+
+    return maybeError.response?.data?.message || maybeError.response?.data?.detail || maybeError.message || null;
+  };
+
   const createMut = useMutation({
     mutationFn: () => {
+      if (!selectedStore) {
+        throw new Error('Please select a store before adding a product.');
+      }
+
+      if (!form.name.trim()) {
+        throw new Error(selectedStore.store_type === 'PRELOVED' ? 'Item title is required.' : 'Product name is required.');
+      }
+
+      if (selectedStore.store_type !== 'READY_TO_EAT' && !form.base_price) {
+        throw new Error('Base price is required.');
+      }
+
       const url = getCreateUrl(selectedStore!);
-      const payload: any = { ...form, base_price: form.base_price };
+      const payload: Record<string, string | boolean> = {
+        ...form,
+        name: form.name.trim(),
+        description: form.description.trim(),
+        base_price: form.base_price,
+      };
+
       // For ready_to_eat, we create menu items without a price (variants have prices)
       if (selectedStore?.store_type === 'READY_TO_EAT') delete payload.base_price;
       // For preloved, rename name to title
@@ -59,112 +106,185 @@ export default function ProductsPage() {
     onSuccess: () => {
       setShowCreate(false);
       setForm({ name: '', description: '', base_price: '', is_available: true });
+      setCreateError('');
       queryClient.invalidateQueries({ queryKey: ['merchant-products', selectedStore?.id] });
+    },
+    onError: (error: unknown) => {
+      setCreateError(getCreateErrorMessage(error) || 'Unable to add product. Please review your inputs.');
     },
   });
 
+  const openCreateModal = () => {
+    setForm({ name: '', description: '', base_price: '', is_available: true });
+    setCreateError('');
+    setShowCreate(true);
+  };
+
+  const closeCreateModal = () => {
+    if (createMut.isPending) {
+      return;
+    }
+    setShowCreate(false);
+  };
+
+  const columns = [
+    { key: 'name', label: 'Name', render: (row: ProductRow) => row.name || (row as any).title || 'N/A' },
+    {
+      key: 'base_price',
+      label: 'Base Price',
+      render: (row: ProductRow) => `PHP ${Number(row.base_price || 0).toLocaleString()}`,
+      sortValue: (row: ProductRow) => Number(row.base_price || 0),
+    },
+    {
+      key: 'final_price',
+      label: 'Final Price',
+      render: (row: ProductRow) => `PHP ${Number(row.final_price || row.base_price || 0).toLocaleString()}`,
+      sortValue: (row: ProductRow) => Number(row.final_price || row.base_price || 0),
+    },
+    {
+      key: 'is_available',
+      label: 'Availability',
+      render: (row: ProductRow) => (
+        <span className={row.is_available ? 'badge-green' : 'badge-red'}>
+          {row.is_available ? 'Available' : 'Unavailable'}
+        </span>
+      ),
+      sortValue: (row: ProductRow) => (row.is_available ? 1 : 0),
+    },
+  ];
+
   return (
     <DashboardLayout>
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Products</h1>
-            <p className="text-sm text-gray-500 mt-1">Manage products across your stores</p>
-          </div>
-          {selectedStore && (
-            <button className="btn-primary flex items-center gap-2" onClick={() => setShowCreate(true)}>
-              <Plus size={16} /> Add Product
-            </button>
-          )}
-        </div>
-
-        {/* Store Selector */}
-        <div className="flex gap-2 mb-6 flex-wrap">
-          {stores.map((s) => (
-            <button
-              key={s.id}
-              onClick={() => setSelectedStore(s)}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                selectedStore?.id === s.id
-                  ? 'bg-primary text-white'
-                  : 'bg-white border border-gray-200 text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              {s.display_name}
-            </button>
-          ))}
-          {stores.length === 0 && <p className="text-gray-500 text-sm">No stores. Create a store first.</p>}
-        </div>
-
-        {/* Products */}
+      <TablePageLayout
+        title="Products"
+        subtitle="Manage products across your stores"
+        breadcrumbs={[{ label: 'Merchant Dashboard', href: '/dashboard' }, { label: 'Products' }]}
+        actionSlot={selectedStore ? (
+          <Button variant="primary" size="md" className="flex items-center gap-2" onClick={openCreateModal}>
+            <Plus size={16} /> Add Product
+          </Button>
+        ) : undefined}
+      >
         {!selectedStore ? (
           <div className="card text-center py-12">
             <Package size={48} className="text-gray-400 mx-auto mb-4" />
-            <p className="text-gray-500">Select a store to view its products</p>
-          </div>
-        ) : loadingProducts ? (
-          <div className="text-gray-500 text-center py-12">Loading products...</div>
-        ) : products.length === 0 ? (
-          <div className="card text-center py-12">
-            <p className="text-gray-500">No products yet. Add your first product!</p>
+            <p className="text-gray-500">Select a store to view its products.</p>
           </div>
         ) : (
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {products.map((p) => (
-              <div key={p.id} className="card space-y-3">
-                <div className="flex items-start justify-between">
-                  <h3 className="text-gray-900 font-medium">{p.name || (p as any).title}</h3>
-                  <span className={p.is_available ? 'badge-green' : 'badge-red'}>
-                    {p.is_available ? 'Available' : 'Unavailable'}
-                  </span>
-                </div>
-                <div className="flex items-center gap-3 text-sm">
-                  <span className="text-gray-500">Base: ₱{Number(p.base_price || 0).toLocaleString()}</span>
-                  <span className="text-primary font-semibold">Final: ₱{Number(p.final_price || p.base_price || 0).toLocaleString()}</span>
-                </div>
-              </div>
-            ))}
-          </div>
+          <DataTable
+            columns={columns}
+            data={products}
+            loading={loadingProducts}
+            onRowClick={(row) => setSelectedProduct(row)}
+            searchPlaceholder="Search product name, pricing, or status..."
+            tabs={stores.map((store) => ({
+              value: store.id,
+              label: store.display_name,
+              count: selectedStore?.id === store.id ? products.length : undefined,
+            }))}
+            activeTab={selectedStore.id}
+            onTabChange={(value) => {
+              const matched = stores.find((store) => store.id === value);
+              if (matched) {
+                setSelectedStore(matched);
+              }
+            }}
+            filterByTab={() => true}
+          />
         )}
+      </TablePageLayout>
+
+      <TableRowDetailsModal
+        open={Boolean(selectedProduct)}
+        title="Product Details"
+        onClose={() => setSelectedProduct(null)}
+        rows={selectedProduct ? [
+          { label: 'ID', value: selectedProduct.id },
+          { label: 'Name', value: selectedProduct.name || (selectedProduct as any).title || 'N/A' },
+          { label: 'Base Price', value: `PHP ${Number(selectedProduct.base_price || 0).toLocaleString()}` },
+          { label: 'Final Price', value: `PHP ${Number(selectedProduct.final_price || selectedProduct.base_price || 0).toLocaleString()}` },
+          { label: 'Available', value: selectedProduct.is_available ? 'Yes' : 'No' },
+        ] : []}
+      />
 
         {/* Create Modal */}
         {showCreate && (
-          <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
-            <div className="card w-full max-w-md space-y-4">
-              <h3 className="text-lg font-semibold text-gray-900">
+          <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+            <form
+              className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl border border-slate-200 bg-white p-6 shadow-xl space-y-4"
+              onSubmit={(event) => {
+                event.preventDefault();
+                setCreateError('');
+                createMut.mutate();
+              }}
+            >
+              <h3 className="text-xl font-semibold text-slate-900">
                 Add {selectedStore?.store_type === 'PRELOVED' ? 'Item' : 'Product'}
               </h3>
-              <input
-                className="input"
+
+              <Input
+                label={selectedStore?.store_type === 'PRELOVED' ? 'Item Title' : 'Product Name'}
                 placeholder={selectedStore?.store_type === 'PRELOVED' ? 'Item title' : 'Product name'}
                 value={form.name}
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
+                disabled={createMut.isPending}
               />
-              <textarea
-                className="input h-20 resize-none"
-                placeholder="Description"
-                value={form.description}
-                onChange={(e) => setForm({ ...form, description: e.target.value })}
-              />
+
+              <div className="space-y-1.5">
+                <label className="text-sm font-semibold text-slate-700">Description</label>
+                <textarea
+                  className="w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:border-primary-400 focus:outline-none focus:ring-2 focus:ring-primary-500/15"
+                  placeholder="Description"
+                  value={form.description}
+                  onChange={(e) => setForm({ ...form, description: e.target.value })}
+                  disabled={createMut.isPending}
+                  rows={4}
+                />
+              </div>
+
               {selectedStore?.store_type !== 'READY_TO_EAT' && (
-                <input
-                  className="input"
+                <Input
+                  label="Base Price (PHP)"
                   type="number"
+                  min="0"
+                  step="0.01"
                   placeholder="Base price (₱)"
                   value={form.base_price}
                   onChange={(e) => setForm({ ...form, base_price: e.target.value })}
+                  disabled={createMut.isPending}
                 />
               )}
+
+              <Dropdown
+                label="Availability"
+                value={String(form.is_available)}
+                options={AVAILABILITY_OPTIONS}
+                onChange={(value) => setForm({ ...form, is_available: value === 'true' })}
+                disabled={createMut.isPending}
+              />
+
+              {createError ? (
+                <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                  {createError}
+                </p>
+              ) : null}
+
               <div className="flex gap-3">
-                <button
-                  className="btn-primary flex-1"
-                  onClick={() => createMut.mutate()}
-                  disabled={!form.name || createMut.isPending}
+                <Button
+                  type="submit"
+                  variant="primary"
+                  size="lg"
+                  className="flex-1"
+                  loading={createMut.isPending}
+                  disabled={!form.name.trim() || (selectedStore?.store_type !== 'READY_TO_EAT' && !form.base_price)}
                 >
-                  {createMut.isPending ? 'Creating...' : 'Add'}
-                </button>
-                <button className="btn-secondary flex-1" onClick={() => setShowCreate(false)}>Cancel</button>
+                  Add
+                </Button>
+                <Button type="button" variant="secondary" size="lg" className="flex-1" onClick={closeCreateModal}>
+                  Cancel
+                </Button>
               </div>
-            </div>
+            </form>
           </div>
         )}
     </DashboardLayout>
