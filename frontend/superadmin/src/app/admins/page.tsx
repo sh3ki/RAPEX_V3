@@ -2,9 +2,12 @@
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import Sidebar from '@/components/Sidebar';
+import DashboardLayout from '@/components/DashboardLayout';
+import DataTable from '@/components/DataTable';
 import api from '@/lib/api';
 import { Plus, UserCog, Edit2, Trash2 } from 'lucide-react';
+import StatusBadge from '@/components/StatusBadge';
+import { TablePageLayout, TableRowDetailsModal } from '@shared/components/table';
 
 interface AdminRow {
   id: string;
@@ -18,6 +21,7 @@ interface AdminRow {
 
 export default function AdminsPage() {
   const [showCreate, setShowCreate] = useState(false);
+  const [selectedAdmin, setSelectedAdmin] = useState<AdminRow | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState({ phone: '', email: '', full_name: '', sub_role: 'OPERATIONS', password: '' });
   const [editForm, setEditForm] = useState({ full_name: '', sub_role: '', is_active: true });
@@ -55,55 +59,77 @@ export default function AdminsPage() {
     setEditForm({ full_name: admin.full_name || '', sub_role: admin.sub_role || 'OPERATIONS', is_active: admin.is_active });
   };
 
+  const columns = [
+    { key: 'full_name', label: 'Name', render: (row: AdminRow) => row.full_name || 'N/A' },
+    { key: 'phone', label: 'Phone' },
+    { key: 'email', label: 'Email', render: (row: AdminRow) => row.email || 'N/A' },
+    { key: 'sub_role', label: 'Sub Role', render: (row: AdminRow) => row.sub_role || 'N/A' },
+    {
+      key: 'is_active',
+      label: 'Status',
+      render: (row: AdminRow) => <StatusBadge status={row.is_active ? 'Active' : 'Inactive'} />,
+      sortValue: (row: AdminRow) => (row.is_active ? 1 : 0),
+    },
+    {
+      key: 'last_login',
+      label: 'Last Login',
+      render: (row: AdminRow) => row.last_login ? new Date(row.last_login).toLocaleString() : 'Never',
+      sortValue: (row: AdminRow) => row.last_login ? new Date(row.last_login).getTime() : 0,
+    },
+  ];
+
   return (
-    <div className="flex min-h-screen">
-      <Sidebar />
-      <main className="flex-1 lg:ml-64 p-6">
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-              <UserCog size={24} className="text-primary" /> Admin Accounts
-            </h1>
-            <p className="text-dark-muted text-sm mt-1">Manage admin users</p>
-          </div>
+    <DashboardLayout>
+      <TablePageLayout
+        title="Admin Accounts"
+        subtitle="Manage admin users"
+        breadcrumbs={[{ label: 'SuperAdmin Dashboard', href: '/dashboard' }, { label: 'Admin Accounts' }]}
+        actionSlot={
           <button className="btn-primary flex items-center gap-2" onClick={() => setShowCreate(true)}>
             <Plus size={16} /> Add Admin
           </button>
-        </div>
+        }
+      >
+        <DataTable
+          loading={isLoading}
+          columns={columns}
+          data={admins}
+          onRowClick={(row) => setSelectedAdmin(row)}
+          searchPlaceholder="Search by name, phone, role, or email..."
+          getRowActions={(row) => [
+            {
+              label: 'Edit Admin',
+              onClick: () => openEdit(row),
+              icon: <Edit2 size={14} />,
+            },
+            {
+              label: 'Deactivate Admin',
+              onClick: () => {
+                if (confirm('Deactivate this admin?')) {
+                  deleteMut.mutate(row.id);
+                }
+              },
+              icon: <Trash2 size={14} />,
+              disabled: deleteMut.isPending,
+            },
+          ]}
+        />
+      </TablePageLayout>
 
-        {isLoading ? (
-          <div className="text-dark-muted text-center py-20">Loading...</div>
-        ) : (
-          <div className="grid gap-4">
-            {admins.map((a) => (
-              <div key={a.id} className="card flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                  <div className="w-10 h-10 rounded-full bg-primary/20 text-primary flex items-center justify-center font-bold text-sm">
-                    {(a.full_name || a.phone || '?')[0].toUpperCase()}
-                  </div>
-                  <div>
-                    <p className="text-white font-medium">{a.full_name || a.phone}</p>
-                    <p className="text-dark-muted text-xs">{a.phone} · {a.sub_role || 'N/A'}</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-4">
-                  <span className={`text-xs font-medium ${a.is_active ? 'badge-green' : 'badge-red'}`}>
-                    {a.is_active ? 'Active' : 'Inactive'}
-                  </span>
-                  <button onClick={() => openEdit(a)} className="text-blue-400 hover:text-blue-300">
-                    <Edit2 size={16} />
-                  </button>
-                  <button
-                    onClick={() => { if (confirm('Deactivate this admin?')) deleteMut.mutate(a.id); }}
-                    className="text-red-400 hover:text-red-300"
-                  >
-                    <Trash2 size={16} />
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
+      <TableRowDetailsModal
+        open={Boolean(selectedAdmin)}
+        title="Admin Details"
+        onClose={() => setSelectedAdmin(null)}
+        rows={selectedAdmin ? [
+          { label: 'ID', value: selectedAdmin.id },
+          { label: 'Name', value: selectedAdmin.full_name || 'N/A' },
+          { label: 'Phone', value: selectedAdmin.phone },
+          { label: 'Email', value: selectedAdmin.email || 'N/A' },
+          { label: 'Sub Role', value: selectedAdmin.sub_role || 'N/A' },
+          { label: 'Status', value: selectedAdmin.is_active ? 'Active' : 'Inactive' },
+          { label: 'Last Login', value: selectedAdmin.last_login ? new Date(selectedAdmin.last_login).toLocaleString() : 'Never' },
+        ] : []}
+      />
 
         {/* Create Modal */}
         {showCreate && (
@@ -160,7 +186,6 @@ export default function AdminsPage() {
             </div>
           </div>
         )}
-      </main>
-    </div>
+    </DashboardLayout>
   );
 }
