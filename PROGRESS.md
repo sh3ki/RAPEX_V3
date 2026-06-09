@@ -1,7 +1,7 @@
 # RAPEX Technologies OPC — FULL PROJECT PROGRESS TRACKER
 
-> **Last Updated:** April 18, 2026  
-> **Updated By:** GitHub Copilot (onboarding recapture/docs/final-review stabilization + OTP/legal/provider updates)  
+> **Last Updated:** April 19, 2026  
+> **Updated By:** GitHub Copilot (merchant stores/products professional add-flow + backend approval gating)  
 > **Version:** 1.0 MVP  
 > **Overall Progress (estimated from implemented code):** ![59%](https://progress-bar.xyz/59)
 
@@ -106,6 +106,27 @@
 - [x] Map picker now starts at a closer default zoom and preserves user zoom level while moving map pins
 - [x] Valid ID front/back previews now render in 16:9 landscape with object-contain for both staged and saved files
 - [x] Country-code seeding now covers all dialing regions and DB schema now supports non-unique dial codes shared by multiple countries
+- [x] Shared table/list page standardization deployed across Admin, SuperAdmin, Merchant, Rider, and User apps via reusable `TablePageLayout` + `TableRowDetailsModal`, with `DataTable` row-click support and unified action handling
+- [x] Full frontend validation pass completed after rollout (`admin`, `superadmin`, `merchant`, `rider`, `user` all pass `npm run typecheck`)
+- [x] Shared media storage utility added (`apps/core/storage.py`) to centralize upload paths, storage-path normalization, and URL resolution across modules
+- [x] KYC, merchant onboarding, admin review payloads, chat attachments, and product/store image serializers now resolve storage paths to consistent display URLs
+- [x] New upload endpoints added for merchant store assets, merchant product images, and chat attachments, all returning `{file_url, storage_path}` payloads
+- [x] Owner-first storage taxonomy enforced across role uploads (`user/{id}`, `rider/{id}`, `merchant/{id}`, `admin/{id}`, `superadmin/{id}`) with document/media grouping (`files`, `profile`, `assets`, `media/images`, `media/videos`)
+- [x] Documentation updated to mandate upload taxonomy in Blueprint, DevGuide, and README so future file/image/video uploads remain organized
+- [x] Docker backend startup now guarantees MinIO bucket readiness via `ensure_storage_bucket` and supports optional seeding toggle (`AUTO_SEED`) to preserve local cleanup runs
+- [x] Local database account cleanup completed in Docker (`CustomUser` and all role profile tables verified at zero rows)
+- [x] Admin now receives realtime merchant notifications for both pre-onboarding registration and onboarding submission events
+- [x] Notifications WebSocket now supports JWT query-token auth fallback, enabling reliable admin realtime updates without session-cookie dependency
+- [x] Admin sidebar now shows a red numbered badge for pending merchant KYC count on the `Merchants` menu item
+- [x] Admin merchants table now flags rows that were just announced via onboarding-submitted realtime notifications
+- [x] Merchant pending screen now unlocks to dashboard when backend reports approved KYC but account status payload is stale-pending
+- [x] Merchant stores create flow now requires uploaded profile image file and uses shared dropdown-driven category selection UX
+- [x] Merchant stores list now routes to dedicated store detail page (`/stores/[storeId]`) with shared table/layout composition
+- [x] Merchant store detail now provides a professional store-scoped Add Product modal with minimum 3-image upload requirement
+- [x] Product creation now enforces module-aware routing per store type (shop, fresh_market, ready_to_eat, preloved) from store detail context
+- [x] Backend product tables now include `approval_status` moderation fields defaulted to `PENDING` across all 4 merchant product modules
+- [x] Backend serializers now enforce minimum 3 product images on create flows across all 4 merchant product modules
+- [x] Backend product endpoints now enforce merchant ownership + correct store-type table routing during create/list/detail operations
 - [~] Running Docker backend seed command still appears to use an older source variant that omits merchant onboarding catalog seeding; source parity follow-up remains
 - [~] Web dashboards implemented but integration still incomplete
 - [ ] Mobile app implementation started
