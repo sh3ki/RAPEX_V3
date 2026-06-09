@@ -1,12 +1,20 @@
 """RAPEX Messaging Module — Views"""
 from django.utils import timezone
 from rest_framework import generics, status
+from rest_framework.exceptions import PermissionDenied
+from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from apps.core.storage import resolve_storage_url, role_directory, save_upload
 
 from .models import ChatThread, ChatMessage
-from .serializers import ChatThreadSerializer, ChatMessageSerializer, SendMessageSerializer
+from .serializers import (
+    ChatThreadSerializer,
+    ChatMessageSerializer,
+    SendMessageSerializer,
+    ChatAttachmentUploadSerializer,
+)
 
 
 class ChatThreadListView(generics.ListAPIView):
@@ -94,4 +102,49 @@ class SendMessageView(APIView):
         except Exception:
             pass
 
-        return Response(ChatMessageSerializer(msg).data, status=status.HTTP_201_CREATED)
+        return Response(ChatMessageSerializer(msg, context={'request': request}).data, status=status.HTTP_201_CREATED)
+
+
+class ChatAttachmentUploadView(APIView):
+    """POST /api/v1/chat/attachments/upload/"""
+    permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
+
+    def post(self, request):
+        serializer = ChatAttachmentUploadSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        thread = None
+        thread_id = serializer.validated_data.get('thread_id')
+        if thread_id:
+            thread = ChatThread.objects.get(pk=thread_id, is_deleted=False)
+            if request.user.role not in ['ADMIN', 'SUPERADMIN'] and thread.participant_id != request.user.id:
+                raise PermissionDenied('You do not have access to this thread.')
+
+        upload_file = serializer.validated_data['file']
+        content_type = (getattr(upload_file, 'content_type', '') or '').lower()
+        media_folder = 'images' if content_type.startswith('image/') else 'files'
+        stored_path = save_upload(
+            upload_file,
+            'communications',
+            'chat',
+            'threads',
+            str(thread.id) if thread else 'unassigned',
+            'attachments',
+            role_directory(request.user.role),
+            str(request.user.id),
+            media_folder,
+            stem='attachment',
+        )
+
+        message_type = 'IMAGE' if content_type.startswith('image/') else 'FILE'
+
+        return Response(
+            {
+                'thread_id': str(thread.id) if thread else None,
+                'message_type': message_type,
+                'file_url': resolve_storage_url(stored_path, request=request),
+                'storage_path': stored_path,
+            },
+            status=status.HTTP_201_CREATED,
+        )
