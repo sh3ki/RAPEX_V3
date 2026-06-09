@@ -1,5 +1,6 @@
 """RAPEX Messaging Module — Serializers"""
 from rest_framework import serializers
+from apps.core.storage import normalize_storage_path, resolve_storage_url
 from .models import ChatThread, ChatMessage
 
 
@@ -22,6 +23,12 @@ class ChatMessageSerializer(serializers.ModelSerializer):
             'is_verified', 'wallet_amount', 'read_at', 'created_at',
         ]
 
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        request = self.context.get('request')
+        data['attachment_url'] = resolve_storage_url(data.get('attachment_url'), request=request)
+        return data
+
 
 class SendMessageSerializer(serializers.Serializer):
     thread_id = serializers.UUIDField(required=False)
@@ -30,3 +37,33 @@ class SendMessageSerializer(serializers.Serializer):
     )
     body = serializers.CharField(required=False, allow_blank=True)
     attachment_url = serializers.CharField(required=False, allow_blank=True)
+
+    def validate_attachment_url(self, value):
+        return normalize_storage_path(value)
+
+
+class ChatAttachmentUploadSerializer(serializers.Serializer):
+    thread_id = serializers.UUIDField(required=False, allow_null=True)
+    file = serializers.FileField()
+
+    def validate_file(self, value):
+        max_size = 10 * 1024 * 1024
+        if value.size > max_size:
+            raise serializers.ValidationError('File exceeds 10MB size limit.')
+
+        allowed_content_types = {
+            'image/jpeg',
+            'image/png',
+            'image/webp',
+            'application/pdf',
+            'text/plain',
+            'application/zip',
+            'application/x-zip-compressed',
+            'application/msword',
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        }
+        content_type = (getattr(value, 'content_type', '') or '').lower()
+        if content_type and content_type not in allowed_content_types:
+            raise serializers.ValidationError('Unsupported file type for chat attachment.')
+
+        return value
