@@ -359,6 +359,28 @@ DEFAULT_INCENTIVE_BONUS_AMOUNT=250
 WALLET_THRESHOLD_FOR_LARGE_ORDERS=1001
 ```
 
+### Upload Storage Taxonomy (Mandatory)
+
+All uploads must follow an owner-first folder taxonomy and must be generated through backend storage helpers.
+
+Canonical examples:
+
+```text
+merchant/{merchant_id}/files/valid_id/front/{filename}
+merchant/{merchant_id}/files/valid_id/back/{filename}
+merchant/{merchant_id}/profile/images/{filename}
+merchant/{merchant_id}/stores/{store_id}/assets/logo/images/{filename}
+merchant/{merchant_id}/stores/{store_id}/products/{store_type}/media/images/{filename}
+merchant/{merchant_id}/stores/{store_id}/products/{store_type}/media/videos/{filename}
+user/{user_id}/files/valid_id/front/{filename}
+rider/{rider_id}/files/valid_id/selfie_with_id/{filename}
+communications/chat/threads/{thread_id}/attachments/{role}/{account_id}/files/{filename}
+```
+
+Implementation rule:
+- Use `backend/apps/core/storage.py` for all upload path generation and storage-path normalization.
+- Do not handcraft path strings in individual modules.
+
 ### Frontend `.env.local` (per app)
 
 ```env
