@@ -17,6 +17,11 @@ class MenuCategory(BaseModel):
 
 
 class MenuItem(BaseModel):
+    class ApprovalStatus(models.TextChoices):
+        PENDING = 'PENDING', 'Pending'
+        APPROVED = 'APPROVED', 'Approved'
+        REJECTED = 'REJECTED', 'Rejected'
+
     store = models.ForeignKey('merchant.MerchantStore', on_delete=models.CASCADE, related_name='menu_items')
     category = models.ForeignKey(MenuCategory, on_delete=models.SET_NULL, null=True, blank=True, related_name='items')
     name = models.CharField(max_length=200)
@@ -24,6 +29,12 @@ class MenuItem(BaseModel):
     images = models.JSONField(default=list, blank=True)
     is_available = models.BooleanField(default=True)
     is_sold_out = models.BooleanField(default=False)
+    approval_status = models.CharField(
+        max_length=20,
+        choices=ApprovalStatus.choices,
+        default=ApprovalStatus.PENDING,
+        db_index=True,
+    )
 
     class Meta:
         db_table = 'menu_items'
