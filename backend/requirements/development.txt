@@ -4,6 +4,10 @@
 black==25.1.0
 flake8==7.2.0
 isort==5.13.2
+watchfiles==1.0.3
+
+# ── Auto-reload for Celery & Daphne ─────────────
+watchdog[watchmedo]==4.0.2
 
 # ── Testing ───────────────────────────────────────
 factory-boy==3.3.1
