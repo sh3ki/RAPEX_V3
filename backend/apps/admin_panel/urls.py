@@ -2,7 +2,7 @@ from django.urls import path
 from .views import (
     AdminDashboardView,
     AdminUserListView, AdminUserDetailView, AdminUserKYCApproveView, AdminUserKYCRejectView,
-    AdminMerchantListView, AdminMerchantKYCApproveView, AdminMerchantKYCRejectView,
+    AdminMerchantListView, AdminMerchantDetailView, AdminMerchantKYCApproveView, AdminMerchantKYCRejectView,
     AdminRiderListView, AdminRiderKYCApproveView, AdminRiderKYCRejectView,
     AdminRiderWalletLoadView, AdminRiderIncentiveConfirmView,
     AdminReportDailyView, AdminReportWeeklyView, AdminReportByStoreTypeView,
@@ -24,6 +24,7 @@ urlpatterns = [
 
     # Merchants
     path('merchants/', AdminMerchantListView.as_view(), name='admin-merchant-list'),
+    path('merchants/<uuid:pk>/details/', AdminMerchantDetailView.as_view(), name='admin-merchant-detail'),
     path('merchants/<uuid:pk>/approve/', AdminMerchantKYCApproveView.as_view(), name='admin-merchant-approve'),
     path('merchants/<uuid:pk>/reject/', AdminMerchantKYCRejectView.as_view(), name='admin-merchant-reject'),
 
