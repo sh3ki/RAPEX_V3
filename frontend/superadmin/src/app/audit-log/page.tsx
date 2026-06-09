@@ -1,10 +1,12 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import Sidebar from '@/components/Sidebar';
+import { useState } from 'react';
+import DashboardLayout from '@/components/DashboardLayout';
 import DataTable from '@/components/DataTable';
 import api from '@/lib/api';
 import { ScrollText } from 'lucide-react';
+import { TablePageLayout, TableRowDetailsModal } from '@shared/components/table';
 
 interface AuditRow {
   source: string;
@@ -15,6 +17,8 @@ interface AuditRow {
 }
 
 export default function AuditLogPage() {
+  const [selectedLog, setSelectedLog] = useState<AuditRow | null>(null);
+
   const { data: logs = [], isLoading } = useQuery<AuditRow[]>({
     queryKey: ['sa-audit-log'],
     queryFn: () => api.get('/superadmin/audit-log/').then((r) => r.data),
@@ -41,18 +45,27 @@ export default function AuditLogPage() {
   ];
 
   return (
-    <div className="flex min-h-screen">
-      <Sidebar />
-      <main className="flex-1 lg:ml-64 p-6">
-        <div className="mb-6">
-          <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-            <ScrollText size={24} className="text-primary" /> Audit Log
-          </h1>
-          <p className="text-dark-muted text-sm mt-1">Combined SuperAdmin & Admin activity log</p>
-        </div>
+    <DashboardLayout>
+      <TablePageLayout
+        title="Audit Log"
+        subtitle="Combined SuperAdmin and Admin activity log"
+        breadcrumbs={[{ label: 'SuperAdmin Dashboard', href: '/dashboard' }, { label: 'Audit Log' }]}
+      >
+        <DataTable loading={isLoading} columns={columns} data={logs} onRowClick={(row) => setSelectedLog(row)} />
+      </TablePageLayout>
 
-        <DataTable columns={columns} data={isLoading ? [] : logs} />
-      </main>
-    </div>
+      <TableRowDetailsModal
+        open={Boolean(selectedLog)}
+        title="Audit Event Details"
+        onClose={() => setSelectedLog(null)}
+        rows={selectedLog ? [
+          { label: 'Source', value: selectedLog.source },
+          { label: 'Admin ID', value: selectedLog.admin_id },
+          { label: 'Action', value: selectedLog.action },
+          { label: 'Target', value: selectedLog.target_type },
+          { label: 'Created At', value: new Date(selectedLog.created_at).toLocaleString() },
+        ] : []}
+      />
+    </DashboardLayout>
   );
 }
