@@ -2,6 +2,7 @@
 RAPEX Accounts — Serializers
 """
 from rest_framework import serializers
+from apps.core.storage import resolve_storage_url
 
 from .models import (
     AdminProfile,
@@ -142,9 +143,15 @@ class UserSerializer(serializers.ModelSerializer):
         model = CustomUser
         fields = [
             'id', 'phone', 'email', 'first_name', 'last_name', 'avatar_url',
-            'role', 'is_active', 'is_verified', 'date_joined',
+            'role', 'status', 'wizard_completed', 'is_active', 'is_verified', 'date_joined',
         ]
         read_only_fields = fields
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        request = self.context.get('request')
+        data['avatar_url'] = resolve_storage_url(data.get('avatar_url'), request=request)
+        return data
 
 
 class SuperAdminProfileSerializer(serializers.ModelSerializer):
@@ -179,6 +186,14 @@ class MerchantProfileSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['id', 'user', 'kyc_status', 'kyc_rejection_reason', 'created_at', 'updated_at']
 
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        request = self.context.get('request')
+        data['kyc_id_photo'] = resolve_storage_url(data.get('kyc_id_photo'), request=request)
+        data['kyc_selfie_photo'] = resolve_storage_url(data.get('kyc_selfie_photo'), request=request)
+        data['kyc_business_doc'] = resolve_storage_url(data.get('kyc_business_doc'), request=request)
+        return data
+
 
 class RiderProfileSerializer(serializers.ModelSerializer):
     user = UserSerializer(read_only=True)
@@ -202,6 +217,13 @@ class RiderProfileSerializer(serializers.ModelSerializer):
             'background_check_flagged', 'created_at', 'updated_at',
         ]
 
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        request = self.context.get('request')
+        data['kyc_id_photo'] = resolve_storage_url(data.get('kyc_id_photo'), request=request)
+        data['kyc_selfie_photo'] = resolve_storage_url(data.get('kyc_selfie_photo'), request=request)
+        return data
+
 
 class UserProfileSerializer(serializers.ModelSerializer):
     user = UserSerializer(read_only=True)
@@ -215,6 +237,13 @@ class UserProfileSerializer(serializers.ModelSerializer):
             'created_at', 'updated_at',
         ]
         read_only_fields = ['id', 'user', 'kyc_status', 'created_at', 'updated_at']
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        request = self.context.get('request')
+        data['kyc_id_photo'] = resolve_storage_url(data.get('kyc_id_photo'), request=request)
+        data['kyc_selfie_photo'] = resolve_storage_url(data.get('kyc_selfie_photo'), request=request)
+        return data
 
 
 # ═══════════════════════════════════════════════════════════════════
