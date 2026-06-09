@@ -1,10 +1,31 @@
 'use client';
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import api from '@/lib/api';
 import { Wallet, Star, ArrowUpRight, ArrowDownRight, Gift } from 'lucide-react';
 import Link from 'next/link';
+import DashboardLayout from '@/components/DashboardLayout';
+import { DataTable, TablePageLayout, TableRowDetailsModal } from '@shared/components/table';
+
+interface WalletTxnRow {
+  type?: string;
+  amount?: string;
+  description?: string;
+  reference?: string;
+  created_at?: string;
+}
+
+interface PointsRow {
+  points: number;
+  description?: string;
+  reason?: string;
+  created_at?: string;
+}
 
 export default function WalletPage() {
+  const [selectedTxn, setSelectedTxn] = useState<WalletTxnRow | null>(null);
+  const [selectedPoints, setSelectedPoints] = useState<PointsRow | null>(null);
+
   const { data: wallet } = useQuery({
     queryKey: ['wallet'],
     queryFn: async () => { const { data } = await api.get('/user/wallet/'); return data; },
@@ -22,10 +43,68 @@ export default function WalletPage() {
 
   const balance = parseFloat(wallet?.balance || '0');
   const loyaltyPts = points?.points || points?.total || 0;
+  const walletTxns: WalletTxnRow[] = (wallet?.transactions || []) as WalletTxnRow[];
+  const pointsRows: PointsRow[] = (pointsHistory || []) as PointsRow[];
+
+  const walletTxnColumns = [
+    {
+      key: 'direction',
+      label: 'Direction',
+      sortable: false,
+      render: (row: WalletTxnRow) => {
+        const isCredit = row.type === 'CREDIT' || parseFloat(row.amount || '0') > 0;
+        return isCredit ? <ArrowDownRight size={16} className="text-green-400" /> : <ArrowUpRight size={16} className="text-red-400" />;
+      },
+    },
+    {
+      key: 'description',
+      label: 'Description',
+      render: (row: WalletTxnRow) => row.description || row.reference || 'Wallet entry',
+    },
+    {
+      key: 'amount',
+      label: 'Amount',
+      render: (row: WalletTxnRow) => {
+        const amount = parseFloat(row.amount || '0');
+        return `${amount > 0 ? '+' : '-'}PHP ${Math.abs(amount).toLocaleString()}`;
+      },
+      sortValue: (row: WalletTxnRow) => Math.abs(parseFloat(row.amount || '0')),
+    },
+    {
+      key: 'created_at',
+      label: 'Created',
+      render: (row: WalletTxnRow) => row.created_at ? new Date(row.created_at).toLocaleString() : 'N/A',
+      sortValue: (row: WalletTxnRow) => row.created_at ? new Date(row.created_at).getTime() : 0,
+    },
+  ];
+
+  const pointsColumns = [
+    {
+      key: 'description',
+      label: 'Description',
+      render: (row: PointsRow) => row.description || row.reason || 'Points entry',
+    },
+    {
+      key: 'points',
+      label: 'Points',
+      render: (row: PointsRow) => `${row.points > 0 ? '+' : ''}${row.points} pts`,
+      sortValue: (row: PointsRow) => row.points,
+    },
+    {
+      key: 'created_at',
+      label: 'Created',
+      render: (row: PointsRow) => row.created_at ? new Date(row.created_at).toLocaleString() : 'N/A',
+      sortValue: (row: PointsRow) => row.created_at ? new Date(row.created_at).getTime() : 0,
+    },
+  ];
 
   return (
-    <div className="p-4 space-y-4">
-      <h1 className="text-xl font-bold">Wallet</h1>
+    <DashboardLayout>
+      <TablePageLayout
+        title="Wallet"
+        subtitle="Wallet balance, transactions, and loyalty points"
+        breadcrumbs={[{ label: 'Home', href: '/' }, { label: 'Wallet' }]}
+      >
 
       {/* Balance card */}
       <div className="card bg-gradient-to-br from-primary-500/20 to-primary-500/5 border-primary-500/30">
@@ -50,49 +129,53 @@ export default function WalletPage() {
 
       {/* Transaction history header */}
       <h2 className="font-semibold text-sm text-dark-muted">Wallet Transactions</h2>
-      {(wallet?.transactions || []).length === 0 ? (
+      {walletTxns.length === 0 ? (
         <p className="text-center py-6 text-dark-muted text-sm">No transactions yet</p>
       ) : (
-        <div className="space-y-2">
-          {(wallet?.transactions || []).map((tx: any, i: number) => {
-            const isCredit = tx.type === 'CREDIT' || parseFloat(tx.amount) > 0;
-            return (
-              <div key={i} className="card !p-4 flex items-center gap-3">
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${isCredit ? 'bg-green-500/10' : 'bg-red-500/10'}`}>
-                  {isCredit ? <ArrowDownRight size={16} className="text-green-400" /> : <ArrowUpRight size={16} className="text-red-400" />}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium truncate">{tx.description || tx.reference || (isCredit ? 'Credit' : 'Debit')}</p>
-                  <p className="text-[10px] text-dark-muted">{new Date(tx.created_at).toLocaleString()}</p>
-                </div>
-                <span className={`font-semibold text-sm ${isCredit ? 'text-green-400' : 'text-red-400'}`}>
-                  {isCredit ? '+' : '-'}₦{Math.abs(parseFloat(tx.amount)).toLocaleString()}
-                </span>
-              </div>
-            );
-          })}
-        </div>
+        <DataTable
+          columns={walletTxnColumns}
+          data={walletTxns}
+          onRowClick={(row) => setSelectedTxn(row)}
+          searchPlaceholder="Search wallet transactions..."
+        />
       )}
 
       {/* Points history */}
-      {(pointsHistory || []).length > 0 && (
+      {pointsRows.length > 0 && (
         <>
           <h2 className="font-semibold text-sm text-dark-muted mt-4">Points History</h2>
-          <div className="space-y-2">
-            {(pointsHistory || []).map((p: any, i: number) => (
-              <div key={i} className="card !p-3 flex items-center justify-between">
-                <div>
-                  <p className="text-sm">{p.description || p.reason || 'Points'}</p>
-                  <p className="text-[10px] text-dark-muted">{new Date(p.created_at).toLocaleString()}</p>
-                </div>
-                <span className={`font-semibold text-sm ${p.points > 0 ? 'text-green-400' : 'text-red-400'}`}>
-                  {p.points > 0 ? '+' : ''}{p.points} pts
-                </span>
-              </div>
-            ))}
-          </div>
+          <DataTable
+            columns={pointsColumns}
+            data={pointsRows}
+            onRowClick={(row) => setSelectedPoints(row)}
+            searchPlaceholder="Search points history..."
+          />
         </>
       )}
-    </div>
+      </TablePageLayout>
+
+      <TableRowDetailsModal
+        open={Boolean(selectedTxn)}
+        title="Wallet Transaction Details"
+        onClose={() => setSelectedTxn(null)}
+        rows={selectedTxn ? [
+          { label: 'Type', value: selectedTxn.type || 'N/A' },
+          { label: 'Amount', value: `PHP ${Math.abs(parseFloat(selectedTxn.amount || '0')).toLocaleString()}` },
+          { label: 'Description', value: selectedTxn.description || selectedTxn.reference || 'N/A' },
+          { label: 'Created At', value: selectedTxn.created_at ? new Date(selectedTxn.created_at).toLocaleString() : 'N/A' },
+        ] : []}
+      />
+
+      <TableRowDetailsModal
+        open={Boolean(selectedPoints)}
+        title="Points Entry Details"
+        onClose={() => setSelectedPoints(null)}
+        rows={selectedPoints ? [
+          { label: 'Points', value: `${selectedPoints.points > 0 ? '+' : ''}${selectedPoints.points} pts` },
+          { label: 'Description', value: selectedPoints.description || selectedPoints.reason || 'N/A' },
+          { label: 'Created At', value: selectedPoints.created_at ? new Date(selectedPoints.created_at).toLocaleString() : 'N/A' },
+        ] : []}
+      />
+    </DashboardLayout>
   );
 }
