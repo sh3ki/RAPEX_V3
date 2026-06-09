@@ -6,7 +6,8 @@ import DashboardLayout from '@/components/DashboardLayout';
 import DataTable from '@/components/DataTable';
 import StatusBadge from '@/components/StatusBadge';
 import api from '@/lib/api';
-import { Search, CheckCircle, XCircle } from 'lucide-react';
+import { CheckCircle, XCircle } from 'lucide-react';
+import { TablePageLayout, TableRowDetailsModal } from '@shared/components/table';
 
 interface UserRow {
   id: string;
@@ -16,12 +17,12 @@ interface UserRow {
 }
 
 export default function UsersPage() {
-  const [search, setSearch] = useState('');
+  const [selectedUser, setSelectedUser] = useState<UserRow | null>(null);
   const queryClient = useQueryClient();
 
   const { data: users = [], isLoading } = useQuery<UserRow[]>({
-    queryKey: ['admin-users', search],
-    queryFn: () => api.get('/admin/users/', { params: search ? { search } : {} }).then((r) => r.data),
+    queryKey: ['admin-users'],
+    queryFn: () => api.get('/admin/users/').then((r) => r.data),
   });
 
   const approveMut = useMutation({
@@ -42,57 +43,55 @@ export default function UsersPage() {
       label: 'KYC Status',
       render: (r: UserRow) => r.kyc_status ? <StatusBadge status={r.kyc_status} /> : '—',
     },
-    {
-      key: 'actions',
-      label: 'Actions',
-      render: (r: UserRow) => (
-        <div className="flex gap-2">
-          {r.kyc_status === 'PENDING' && (
-            <>
-              <button
-                onClick={(e) => { e.stopPropagation(); approveMut.mutate(r.id); }}
-                className="flex items-center gap-1 text-green-400 hover:text-green-300 text-xs"
-              >
-                <CheckCircle size={14} /> Approve
-              </button>
-              <button
-                onClick={(e) => { e.stopPropagation(); rejectMut.mutate(r.id); }}
-                className="flex items-center gap-1 text-red-400 hover:text-red-300 text-xs"
-              >
-                <XCircle size={14} /> Reject
-              </button>
-            </>
-          )}
-        </div>
-      ),
-    },
   ];
 
   return (
     <DashboardLayout>
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">User Management</h1>
-            <p className="text-gray-500 text-sm mt-1">View and manage user accounts & KYC</p>
-          </div>
-        </div>
-
-        {/* Search */}
-        <div className="relative mb-6 max-w-md">
-          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
-          <input
-            type="text"
-            className="input pl-10"
-            placeholder="Search by phone or name..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </div>
-
+      <TablePageLayout
+        title="User Management"
+        subtitle="View and manage user accounts and KYC"
+        breadcrumbs={[{ label: 'Admin Dashboard', href: '/dashboard' }, { label: 'Users' }]}
+      >
         <DataTable
           columns={columns}
+          loading={isLoading}
           data={users}
+          searchPlaceholder="Search by phone, name, or status..."
+          onRowClick={(row) => setSelectedUser(row)}
+          getRowActions={(row) => {
+            if (row.kyc_status !== 'PENDING') {
+              return [];
+            }
+
+            return [
+              {
+                label: 'Approve KYC',
+                onClick: () => approveMut.mutate(row.id),
+                icon: <CheckCircle size={14} />,
+                disabled: approveMut.isPending,
+              },
+              {
+                label: 'Reject KYC',
+                onClick: () => rejectMut.mutate(row.id),
+                icon: <XCircle size={14} />,
+                disabled: rejectMut.isPending,
+              },
+            ];
+          }}
         />
+      </TablePageLayout>
+
+      <TableRowDetailsModal
+        open={Boolean(selectedUser)}
+        title="User Details"
+        onClose={() => setSelectedUser(null)}
+        rows={selectedUser ? [
+          { label: 'ID', value: selectedUser.id },
+          { label: 'Phone', value: selectedUser.phone },
+          { label: 'Full Name', value: selectedUser.full_name || 'N/A' },
+          { label: 'KYC Status', value: selectedUser.kyc_status || 'N/A' },
+        ] : []}
+      />
     </DashboardLayout>
   );
 }
