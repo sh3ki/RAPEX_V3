@@ -1,19 +1,16 @@
 """RAPEX Merchant Module — Services"""
 import logging
 import math
-import os
 import re
-import uuid
 from decimal import Decimal
 
-from django.core.files.storage import default_storage
 from django.db import transaction
 from django.db.models import F, FloatField, Value
 from django.db.models.functions import ACos, Cos, Radians, Sin
 from django.utils import timezone
-from django.utils.text import get_valid_filename
 
 from apps.core.exceptions import MaxStoresReached, RapexAPIException
+from apps.core.storage import normalize_storage_path, save_upload
 from apps.accounts.models import CustomUser, OTPRecord
 from apps.accounts.services import OTPService
 
@@ -31,9 +28,47 @@ logger = logging.getLogger(__name__)
 
 MAX_STORES = 4
 
+MERCHANT_DOCUMENT_SEGMENT_MAP = {
+    'SELFIE_WITH_ID': ('files', 'valid_id', 'selfie_with_id'),
+    'VALID_ID_FRONT': ('files', 'valid_id', 'front'),
+    'VALID_ID_BACK': ('files', 'valid_id', 'back'),
+    'BARANGAY_PERMIT': ('files', 'business_permits', 'barangay'),
+    'DTI_OR_SEC': ('files', 'business_registration', 'dti_or_sec'),
+    'BIR_2303': ('files', 'tax_documents', 'bir_2303'),
+    'MAYORS_PERMIT': ('files', 'business_permits', 'mayors_permit'),
+    'OTHER': ('files', 'other_documents'),
+}
+
 
 class MerchantService:
     PASSWORD_COMPLEXITY_RE = re.compile(r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^\w\s]).{8,}$')
+
+    @staticmethod
+    def _notify_admins_step_updated(merchant_profile, step_label: str) -> None:
+        """Fire-and-forget realtime nudge so admins see onboarding progress updates."""
+        from apps.notifications.services import NotificationService
+
+        user = merchant_profile.user
+        merchant_display = (merchant_profile.business_name or user.email or f'Merchant {user.id}').strip()
+        NotificationService.send_to_role(
+            'ADMIN',
+            'merchant.onboarding_step_updated',
+            data={
+                'merchant_id': str(user.id),
+                'merchant_display': merchant_display,
+                'step_label': step_label,
+            },
+        )
+
+    @staticmethod
+    def _pending_merchant_kyc_count() -> int:
+        from apps.accounts.models import MerchantProfile
+
+        return MerchantProfile.objects.filter(
+            is_deleted=False,
+            kyc_status='PENDING',
+            wizard_completed=True,
+        ).count()
 
     @staticmethod
     def _validate_password_strength(password: str):
@@ -74,6 +109,48 @@ class MerchantService:
         store.is_open = is_open
         store.save(update_fields=['is_open', 'updated_at'])
         logger.info(f"Store {store.id} is_open → {is_open}")
+
+    @staticmethod
+    def upload_store_asset(store: MerchantStore, upload_file, asset_type: str) -> str:
+        normalized_asset_type = str(asset_type or '').lower().strip()
+        if normalized_asset_type not in {'logo', 'banner'}:
+            raise RapexAPIException('Unsupported store asset type.', code='invalid_store_asset', status_code=400)
+
+        stored_path = save_upload(
+            upload_file,
+            'merchant',
+            str(store.merchant_id),
+            'stores',
+            str(store.id),
+            'assets',
+            normalized_asset_type,
+            'images',
+            stem=normalized_asset_type,
+        )
+
+        if normalized_asset_type == 'logo':
+            store.logo_url = stored_path
+            store.save(update_fields=['logo_url', 'updated_at'])
+        else:
+            store.banner_url = stored_path
+            store.save(update_fields=['banner_url', 'updated_at'])
+
+        return stored_path
+
+    @staticmethod
+    def upload_product_image(store: MerchantStore, upload_file) -> str:
+        return save_upload(
+            upload_file,
+            'merchant',
+            str(store.merchant_id),
+            'stores',
+            str(store.id),
+            'products',
+            store.store_type.lower(),
+            'media',
+            'images',
+            stem='image',
+        )
 
     @staticmethod
     def get_nearby_stores(lat: float, lng: float, radius_km: float = 5.0, store_type: str = None):
@@ -123,29 +200,30 @@ class MerchantService:
         state = MerchantService.get_or_create_onboarding_state(merchant_profile)
         MerchantService._assert_onboarding_editable(state)
 
-        original_name = get_valid_filename(upload_file.name or 'document')
-        _, extension = os.path.splitext(original_name)
-        extension = (extension or '').lower()
+        document_key = str(document_type or '').upper()
+        segments = MERCHANT_DOCUMENT_SEGMENT_MAP.get(document_key, ('files', 'other_documents'))
 
-        path = (
-            f"merchant-onboarding/{merchant_profile.id}/"
-            f"{document_type.lower()}-{uuid.uuid4().hex}{extension}"
+        return save_upload(
+            upload_file,
+            'merchant',
+            str(merchant_profile.id),
+            *segments,
+            stem=document_key.lower() or 'document',
         )
-        stored_path = default_storage.save(path, upload_file)
-        return stored_path
 
     @staticmethod
     def upload_profile_image(merchant_profile, upload_file):
         state = MerchantService.get_or_create_onboarding_state(merchant_profile)
         MerchantService._assert_onboarding_editable(state)
 
-        original_name = get_valid_filename(upload_file.name or 'profile-image')
-        _, extension = os.path.splitext(original_name)
-        extension = (extension or '').lower()
-
-        path = f"merchant-onboarding/{merchant_profile.id}/profile-image-{uuid.uuid4().hex}{extension}"
-        stored_path = default_storage.save(path, upload_file)
-        return stored_path
+        return save_upload(
+            upload_file,
+            'merchant',
+            str(merchant_profile.id),
+            'profile',
+            'images',
+            stem='profile-image',
+        )
 
     @staticmethod
     @transaction.atomic
@@ -194,7 +272,7 @@ class MerchantService:
         user.username = username
         user.phone = phone_number
         user.email = submitted_email
-        image_url = validated_data.get('profile_image_url', '').strip()
+        image_url = normalize_storage_path(validated_data.get('profile_image_url', '').strip())
         if image_url:
             user.avatar_url = image_url
             user.profile_image_url = image_url
@@ -234,6 +312,7 @@ class MerchantService:
             state_update_fields.append('phone_verified')
 
         state.save(update_fields=state_update_fields)
+        transaction.on_commit(lambda: MerchantService._notify_admins_step_updated(merchant_profile, 'Profile'))
         return state
 
     @staticmethod
@@ -279,6 +358,7 @@ class MerchantService:
         }
         state.draft_payload = draft
         state.save(update_fields=['current_step', 'draft_payload'])
+        transaction.on_commit(lambda: MerchantService._notify_admins_step_updated(merchant_profile, 'Business'))
         return state
 
     @staticmethod
@@ -300,6 +380,7 @@ class MerchantService:
         }
         state.draft_payload = draft
         state.save(update_fields=['current_step', 'draft_payload'])
+        transaction.on_commit(lambda: MerchantService._notify_admins_step_updated(merchant_profile, 'Location'))
         return state
 
     @staticmethod
@@ -315,7 +396,7 @@ class MerchantService:
                 MerchantDocument(
                     merchant=merchant_profile,
                     document_type=item['document_type'],
-                    file_url=item['file_url'],
+                    file_url=normalize_storage_path(item['file_url']),
                     is_optional=item.get('is_optional', False),
                 )
             )
@@ -326,6 +407,7 @@ class MerchantService:
         draft['step4_documents'] = validated_data['documents']
         state.draft_payload = draft
         state.save(update_fields=['current_step', 'draft_payload'])
+        transaction.on_commit(lambda: MerchantService._notify_admins_step_updated(merchant_profile, 'Documents'))
         return state
 
     @staticmethod
@@ -439,6 +521,8 @@ class MerchantService:
             ]
         )
         merchant_profile.status = merchant_profile.AccountStatus.PENDING
+        merchant_profile.kyc_status = 'PENDING'
+        merchant_profile.kyc_rejection_reason = ''
         merchant_profile.wizard_completed = True
         merchant_profile.onboarding_submitted_at = timezone.now()
         merchant_profile.resubmission_requested = False
@@ -456,6 +540,7 @@ class MerchantService:
         state.submitted_at = timezone.now()
         state.current_step = 5
         state.can_resubmit = False
+        state.admin_resubmission_note = ''
         state.save(
             update_fields=[
                 'is_submitted',
@@ -466,7 +551,27 @@ class MerchantService:
                 'submitted_at',
                 'current_step',
                 'can_resubmit',
+                'admin_resubmission_note',
             ]
         )
+
+        pending_kyc_count = MerchantService._pending_merchant_kyc_count()
+        merchant_display = (merchant_profile.business_name or user.email or f'Merchant {user.id}').strip()
+
+        def _notify_admins_onboarding_submitted():
+            from apps.notifications.services import NotificationService
+
+            NotificationService.send_to_role(
+                'ADMIN',
+                'merchant.onboarding_submitted',
+                data={
+                    'merchant_id': str(user.id),
+                    'merchant_display': merchant_display,
+                    'pending_kyc_count': pending_kyc_count,
+                    'onboarding_completed': True,
+                },
+            )
+
+        transaction.on_commit(_notify_admins_onboarding_submitted)
 
         return state
