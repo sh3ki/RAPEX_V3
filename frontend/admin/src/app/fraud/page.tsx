@@ -6,7 +6,8 @@ import DashboardLayout from '@/components/DashboardLayout';
 import DataTable from '@/components/DataTable';
 import StatusBadge from '@/components/StatusBadge';
 import api from '@/lib/api';
-import { ShieldAlert, Plus } from 'lucide-react';
+import { Plus } from 'lucide-react';
+import { TablePageLayout, TableRowDetailsModal } from '@shared/components/table';
 
 interface FlagRow {
   id: string;
@@ -26,6 +27,8 @@ interface CaseRow {
 
 export default function FraudPage() {
   const [activeTab, setActiveTab] = useState<'flags' | 'cases' | 'blacklist'>('flags');
+  const [selectedFlag, setSelectedFlag] = useState<FlagRow | null>(null);
+  const [selectedCase, setSelectedCase] = useState<CaseRow | null>(null);
   const [showCreateCase, setShowCreateCase] = useState(false);
   const [showBlacklist, setShowBlacklist] = useState(false);
   const [caseForm, setCaseForm] = useState({ subject_id: '', subject_role: 'USER', title: '', priority: 'MEDIUM' });
@@ -79,13 +82,11 @@ export default function FraudPage() {
 
   return (
     <DashboardLayout>
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-              <ShieldAlert className="text-red-400" size={24} /> Fraud Management
-            </h1>
-            <p className="text-gray-500 text-sm mt-1">Flags, investigation cases, and blacklist</p>
-          </div>
+      <TablePageLayout
+        title="Fraud Management"
+        subtitle="Flags, investigation cases, and blacklist"
+        breadcrumbs={[{ label: 'Admin Dashboard', href: '/dashboard' }, { label: 'Fraud' }]}
+        actionSlot={
           <div className="flex gap-2">
             <button className="btn-primary flex items-center gap-2" onClick={() => setShowCreateCase(true)}>
               <Plus size={16} /> New Case
@@ -94,31 +95,64 @@ export default function FraudPage() {
               Blacklist
             </button>
           </div>
-        </div>
-
-        {/* Tabs */}
-        <div className="flex gap-2 mb-6">
-          {(['flags', 'cases'] as const).map((tab) => (
-            <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                activeTab === tab
-                  ? 'bg-primary text-white'
-                  : 'bg-white text-gray-500 hover:text-gray-900 border border-gray-200'
-              }`}
-            >
-              {tab === 'flags' ? 'Fraud Flags' : 'Cases'}
-            </button>
-          ))}
-        </div>
-
-        {activeTab === 'flags' && (
-          <DataTable columns={flagColumns} data={loadingFlags ? [] : flags} />
+        }
+      >
+        {activeTab === 'flags' ? (
+          <DataTable
+            columns={flagColumns}
+            data={flags}
+            loading={loadingFlags}
+            tabs={[
+              { value: 'flags', label: 'Fraud Flags', count: flags.length },
+              { value: 'cases', label: 'Cases', count: cases.length },
+            ]}
+            activeTab="flags"
+            onTabChange={(value) => setActiveTab(value as 'flags' | 'cases')}
+            filterByTab={() => true}
+            onRowClick={(row) => setSelectedFlag(row)}
+          />
+        ) : (
+          <DataTable
+            columns={caseColumns}
+            data={cases}
+            loading={loadingCases}
+            tabs={[
+              { value: 'flags', label: 'Fraud Flags', count: flags.length },
+              { value: 'cases', label: 'Cases', count: cases.length },
+            ]}
+            activeTab="cases"
+            onTabChange={(value) => setActiveTab(value as 'flags' | 'cases')}
+            filterByTab={() => true}
+            onRowClick={(row) => setSelectedCase(row)}
+          />
         )}
-        {activeTab === 'cases' && (
-          <DataTable columns={caseColumns} data={loadingCases ? [] : cases} />
-        )}
+      </TablePageLayout>
+
+      <TableRowDetailsModal
+        open={Boolean(selectedFlag)}
+        title="Fraud Flag Details"
+        onClose={() => setSelectedFlag(null)}
+        rows={selectedFlag ? [
+          { label: 'ID', value: selectedFlag.id },
+          { label: 'Type', value: selectedFlag.flag_type },
+          { label: 'Role', value: selectedFlag.subject_role },
+          { label: 'Resolution', value: selectedFlag.resolution },
+          { label: 'Created At', value: new Date(selectedFlag.created_at).toLocaleString() },
+        ] : []}
+      />
+
+      <TableRowDetailsModal
+        open={Boolean(selectedCase)}
+        title="Investigation Case Details"
+        onClose={() => setSelectedCase(null)}
+        rows={selectedCase ? [
+          { label: 'ID', value: selectedCase.id },
+          { label: 'Case #', value: selectedCase.case_number },
+          { label: 'Priority', value: selectedCase.priority },
+          { label: 'Status', value: selectedCase.status },
+          { label: 'Created At', value: new Date(selectedCase.created_at).toLocaleString() },
+        ] : []}
+      />
 
         {/* Create Case Modal */}
         {showCreateCase && (
