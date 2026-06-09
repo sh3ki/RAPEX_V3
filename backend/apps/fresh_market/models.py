@@ -17,6 +17,11 @@ class FreshMarketCategory(BaseModel):
 
 
 class FreshMarketProduct(BaseModel):
+    class ApprovalStatus(models.TextChoices):
+        PENDING = 'PENDING', 'Pending'
+        APPROVED = 'APPROVED', 'Approved'
+        REJECTED = 'REJECTED', 'Rejected'
+
     class ProductType(models.TextChoices):
         VEGETABLE = 'VEGETABLE', 'Vegetable'
         FRUIT = 'FRUIT', 'Fruit'
@@ -40,6 +45,7 @@ class FreshMarketProduct(BaseModel):
     store = models.ForeignKey('merchant.MerchantStore', on_delete=models.CASCADE, related_name='fresh_products')
     category = models.ForeignKey(FreshMarketCategory, on_delete=models.SET_NULL, null=True, blank=True, related_name='products')
     name = models.CharField(max_length=200)
+    description = models.TextField(null=True, blank=True)
     product_type = models.CharField(max_length=20, choices=ProductType.choices, default=ProductType.OTHER)
     pricing_mode = models.CharField(max_length=20, choices=PricingMode.choices, default=PricingMode.PER_PIECE)
     base_price = models.DecimalField(max_digits=10, decimal_places=2)
@@ -49,7 +55,14 @@ class FreshMarketProduct(BaseModel):
     freshness_status = models.CharField(max_length=20, choices=FreshnessStatus.choices, default=FreshnessStatus.FRESH_TODAY)
     auto_reset_daily = models.BooleanField(default=False)
     merchant_notes = models.TextField(null=True, blank=True)
+    stock_qty = models.IntegerField(default=0)
     is_available = models.BooleanField(default=True)
+    approval_status = models.CharField(
+        max_length=20,
+        choices=ApprovalStatus.choices,
+        default=ApprovalStatus.PENDING,
+        db_index=True,
+    )
 
     class Meta:
         db_table = 'fresh_market_products'
