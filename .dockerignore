@@ -1,0 +1,78 @@
+# VCS
+.git
+.gitignore
+.gitattributes
+
+# Python
+__pycache__
+*.py[cod]
+*.egg-info
+dist
+build
+.Python
+pip-log.txt
+pip-delete-this-directory.txt
+.tox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+.pytest_cache/
+
+# IDE
+.vscode
+.idea
+*.sublime-project
+*.sublime-workspace
+.DS_Store
+
+# Django
+*.log
+local_settings.py
+/staticfiles/
+/media/
+db.sqlite3
+.env
+.env.local
+
+# Node
+node_modules
+.next
+out
+npm-debug.log
+yarn-error.log
+
+# Documentation
+*.md
+docs
+README.md
+LICENSE
+
+# CI/CD
+.github
+.gitlab-ci.yml
+.travis.yml
+
+# Docker
+Dockerfile.prod
+Dockerfile.dev
+docker-compose*.yml
+.dockerignore
+
+# Testing
+coverage/
+.pytest_cache/
+htmlcov/
+
+# Temp files
+.tmp
+temp
+tmp
+*.tmp
+*.bak
+*.swp
+*.swo
+*~
