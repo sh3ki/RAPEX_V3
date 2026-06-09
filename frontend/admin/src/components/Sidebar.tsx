@@ -3,8 +3,10 @@
 import { LayoutDashboard, Users, Store, Bike, ShoppingCart, BarChart3, Bell, Shield, Gift, MessageSquare } from 'lucide-react';
 import { usePathname } from 'next/navigation';
 import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Sidebar as SharedSidebar, type SidebarSection } from '@shared/components/layout';
 import { useAuthStore } from '@/store/authStore';
+import api from '@/lib/api';
 
 interface SidebarProps {
   collapsed?: boolean;
@@ -52,12 +54,31 @@ export default function Sidebar({ collapsed: collapsedProp, onCollapsedChange }:
   const { logout, user } = useAuthStore();
   const [localCollapsed, setLocalCollapsed] = useState(false);
 
+  const { data: merchants = [] } = useQuery<Array<{ kyc_status: string }>>({
+    queryKey: ['admin-merchants'],
+    queryFn: () => api.get('/admin/merchants/').then((response) => response.data),
+    refetchInterval: 30_000,
+  });
+
+  const pendingMerchantKycCount = merchants.filter(
+    (merchant) => String(merchant.kyc_status || '').toUpperCase() === 'PENDING',
+  ).length;
+
+  const sectionsWithCounts: SidebarSection[] = sections.map((section) => ({
+    ...section,
+    items: section.items.map((item) => (
+      item.href === '/merchants'
+        ? { ...item, badgeCount: pendingMerchantKycCount }
+        : item
+    )),
+  }));
+
   const collapsed = collapsedProp ?? localCollapsed;
   const setCollapsed = onCollapsedChange ?? setLocalCollapsed;
 
   return (
     <SharedSidebar
-      sections={sections}
+      sections={sectionsWithCounts}
       activePath={pathname}
       collapsed={collapsed}
       onCollapsedChange={setCollapsed}
