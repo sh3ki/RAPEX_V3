@@ -1,5 +1,6 @@
 import axios from 'axios';
 import Cookies from 'js-cookie';
+import { clearAuthState } from '@/store/authStore';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 const api = axios.create({ baseURL: API_URL, headers: { 'Content-Type': 'application/json' } });
@@ -41,8 +42,8 @@ api.interceptors.response.use(
           orig.headers = orig.headers || {};
           orig.headers.Authorization = `Bearer ${accessToken}`;
           return api(orig);
-        } catch { Cookies.remove('access_token'); Cookies.remove('refresh_token'); window.location.href = '/login'; }
-      } else { window.location.href = '/login'; }
+        } catch { clearAuthState(); window.location.href = '/login'; }
+      } else { clearAuthState(); window.location.href = '/login'; }
     }
     return Promise.reject(error);
   },
