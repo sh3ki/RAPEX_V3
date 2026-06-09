@@ -3,17 +3,14 @@ RAPEX Accounts — Views
 Auth endpoints: OTP, Registration, Login, Profile, KYC.
 """
 import logging
-import os
-import uuid
 
-from django.core.files.storage import default_storage
-from django.utils.text import get_valid_filename
 from rest_framework import generics, status
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.core.permissions import IsAdmin, IsMerchant, IsRider, IsSuperAdmin, IsUser
+from apps.core.storage import role_directory, save_upload
 
 from .serializers import (
     GoogleLoginSerializer,
@@ -290,14 +287,22 @@ class SuperAdminProfileView(generics.RetrieveUpdateAPIView):
 class KYCUploadView(APIView):
     permission_classes = [IsAuthenticated]
 
-    @staticmethod
-    def _save_kyc_file(user, upload_file, tag: str) -> str:
-        original_name = get_valid_filename(upload_file.name or tag)
-        _, extension = os.path.splitext(original_name)
-        extension = (extension or '').lower()
+    KYC_TAG_PATH_MAP = {
+        'id-photo': ('files', 'valid_id', 'front'),
+        'selfie-photo': ('files', 'valid_id', 'selfie_with_id'),
+        'business-doc': ('files', 'business_documents', 'primary'),
+    }
 
-        path = f"kyc/{str(user.role).lower()}/{user.id}/{tag}-{uuid.uuid4().hex}{extension}"
-        return default_storage.save(path, upload_file)
+    @staticmethod
+    def _save_kyc_file(user, owner_id, upload_file, tag: str) -> str:
+        segments = KYCUploadView.KYC_TAG_PATH_MAP.get(tag, ('files', 'misc', 'other'))
+        return save_upload(
+            upload_file,
+            role_directory(user.role),
+            str(owner_id),
+            *segments,
+            stem=tag,
+        )
 
     def post(self, request):
         serializer = KYCUploadSerializer(data=request.data)
@@ -316,16 +321,17 @@ class KYCUploadView(APIView):
         # Save uploaded files
         data = serializer.validated_data
         generic_document = data.get('document')
+        owner_id = profile.id
 
         if 'kyc_id_photo' in data:
-            profile.kyc_id_photo = self._save_kyc_file(request.user, data['kyc_id_photo'], 'id-photo')
+            profile.kyc_id_photo = self._save_kyc_file(request.user, owner_id, data['kyc_id_photo'], 'id-photo')
         elif generic_document and hasattr(profile, 'kyc_id_photo'):
-            profile.kyc_id_photo = self._save_kyc_file(request.user, generic_document, 'id-photo')
+            profile.kyc_id_photo = self._save_kyc_file(request.user, owner_id, generic_document, 'id-photo')
 
         if 'kyc_selfie_photo' in data:
-            profile.kyc_selfie_photo = self._save_kyc_file(request.user, data['kyc_selfie_photo'], 'selfie-photo')
+            profile.kyc_selfie_photo = self._save_kyc_file(request.user, owner_id, data['kyc_selfie_photo'], 'selfie-photo')
         if 'kyc_business_doc' in data and hasattr(profile, 'kyc_business_doc'):
-            profile.kyc_business_doc = self._save_kyc_file(request.user, data['kyc_business_doc'], 'business-doc')
+            profile.kyc_business_doc = self._save_kyc_file(request.user, owner_id, data['kyc_business_doc'], 'business-doc')
         if 'kyc_id_type' in data and hasattr(profile, 'kyc_id_type'):
             profile.kyc_id_type = data['kyc_id_type']
 
