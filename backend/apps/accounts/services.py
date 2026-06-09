@@ -37,6 +37,34 @@ from .models import (
 logger = logging.getLogger(__name__)
 
 
+def _notify_admins_new_merchant_registration(user: CustomUser) -> None:
+    from apps.notifications.services import NotificationService
+
+    merchant_profile = MerchantProfile.objects.filter(user=user).first()
+    merchant_display = (
+        (merchant_profile.business_name if merchant_profile else '')
+        or (merchant_profile.full_name if merchant_profile else '')
+        or user.email
+        or f'Merchant {user.id}'
+    ).strip()
+    pending_kyc_count = MerchantProfile.objects.filter(
+        is_deleted=False,
+        kyc_status='PENDING',
+        wizard_completed=True,
+    ).count()
+
+    NotificationService.send_to_role(
+        'ADMIN',
+        'merchant.registered',
+        data={
+            'merchant_id': str(user.id),
+            'merchant_display': merchant_display,
+            'pending_kyc_count': pending_kyc_count,
+            'onboarding_completed': False,
+        },
+    )
+
+
 class OTPService:
     """Handles OTP generation, delivery, and verification."""
 
@@ -533,6 +561,8 @@ class AuthService:
             business_lng=kwargs.get('business_lng'),
         )
 
+        transaction.on_commit(lambda: _notify_admins_new_merchant_registration(user))
+
         logger.info(f"Merchant registered: {phone}")
         return user
 
@@ -775,6 +805,9 @@ class MagicLinkService:
             user.save(update_fields=['password'])
             GoogleAuthService._ensure_profile(user, requested_role, normalized_email.split('@')[0], {})
 
+            if requested_role == Roles.MERCHANT:
+                transaction.on_commit(lambda: _notify_admins_new_merchant_registration(user))
+
         record.is_used = True
         record.save(update_fields=['is_used'])
         return AuthService.login_by_user(user, message=tr('auth.magic_link.login_success'))
@@ -955,6 +988,10 @@ class GoogleAuthService:
                 (google_data.get('full_name') or google_data['email']).strip(),
                 {},
             )
+
+            if requested_role == Roles.MERCHANT:
+                transaction.on_commit(lambda: _notify_admins_new_merchant_registration(user))
+
             created = True
 
         GoogleAuthService._sync_user_identity_fields(user, google_data)
