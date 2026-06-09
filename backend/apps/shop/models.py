@@ -17,6 +17,11 @@ class ShopCategory(BaseModel):
 
 
 class ShopProduct(BaseModel):
+    class ApprovalStatus(models.TextChoices):
+        PENDING = 'PENDING', 'Pending'
+        APPROVED = 'APPROVED', 'Approved'
+        REJECTED = 'REJECTED', 'Rejected'
+
     store = models.ForeignKey('merchant.MerchantStore', on_delete=models.CASCADE, related_name='shop_products')
     category = models.ForeignKey(ShopCategory, on_delete=models.SET_NULL, null=True, blank=True, related_name='products')
     name = models.CharField(max_length=200)
@@ -28,6 +33,12 @@ class ShopProduct(BaseModel):
     has_inventory = models.BooleanField(default=False)
     stock_qty = models.IntegerField(default=0)
     is_available = models.BooleanField(default=True)
+    approval_status = models.CharField(
+        max_length=20,
+        choices=ApprovalStatus.choices,
+        default=ApprovalStatus.PENDING,
+        db_index=True,
+    )
     is_on_promo = models.BooleanField(default=False)
     promo_original_price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
 
