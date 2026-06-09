@@ -1,0 +1,156 @@
+version: '3.9'
+
+# Development overrides - combines with docker-compose.yml
+# Usage: docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+
+services:
+
+  # ─── Django Backend (with auto-reload) ──────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: >
+      sh -c "python manage.py migrate --noinput &&
+             python manage.py ensure_storage_bucket &&
+             python manage.py load_initial_settings &&
+             if [ \"${AUTO_SEED:-false}\" = \"true\" ]; then python manage.py seed; fi &&
+             gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 1 --reload --timeout 120"
+    volumes:
+      - ./backend:/app
+      - static-files:/app/staticfiles
+    environment:
+      PYTHONUNBUFFERED: "1"
+      DEBUG: "true"
+    restart: unless-stopped
+
+  # ─── Daphne (WebSocket, with auto-reload) ──────
+  daphne:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: >
+      watchmedo auto-restart -d /app -p '*.py' --recursive --
+      daphne -b 0.0.0.0 -p 8001 config.asgi:application
+    volumes:
+      - ./backend:/app
+    environment:
+      PYTHONUNBUFFERED: "1"
+      DEBUG: "true"
+    restart: unless-stopped
+
+  # ─── Celery Worker (with auto-reload) ─────────
+  celery-worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: >
+      watchmedo auto-restart -d /app -p '*.py' --recursive --
+      celery -A config worker -l info --concurrency 2
+    volumes:
+      - ./backend:/app
+    environment:
+      PYTHONUNBUFFERED: "1"
+      DEBUG: "true"
+    restart: unless-stopped
+
+  # ─── Celery Beat (with auto-reload) ────────────
+  celery-beat:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: >
+      watchmedo auto-restart -d /app -p '*.py' --recursive --
+      celery -A config beat -l info
+    volumes:
+      - ./backend:/app
+    environment:
+      PYTHONUNBUFFERED: "1"
+      DEBUG: "true"
+    restart: unless-stopped
+
+  # ─── Next.js Frontends (with fast refresh) ────
+  frontend-user:
+    build:
+      context: ./frontend/user
+      dockerfile: ../Dockerfile
+    command: npm run dev
+    volumes:
+      - ./frontend/user:/app
+      - ./frontend/shared:/shared
+      - /app/node_modules
+      - /app/.next
+    environment:
+      NODE_ENV: development
+      NEXT_PUBLIC_API_URL: http://localhost/api/v1
+      NEXT_PUBLIC_GOOGLE_CLIENT_ID: ${NEXT_PUBLIC_GOOGLE_CLIENT_ID}
+      WATCHPACK_POLLING: "true"
+    restart: unless-stopped
+
+  frontend-merchant:
+    build:
+      context: ./frontend/merchant
+      dockerfile: ../Dockerfile
+    command: npm run dev
+    volumes:
+      - ./frontend/merchant:/app
+      - ./frontend/shared:/shared
+      - /app/node_modules
+      - /app/.next
+    environment:
+      NODE_ENV: development
+      NEXT_PUBLIC_API_URL: http://localhost/api/v1
+      NEXT_PUBLIC_GOOGLE_CLIENT_ID: ${NEXT_PUBLIC_GOOGLE_CLIENT_ID}
+      WATCHPACK_POLLING: "true"
+    restart: unless-stopped
+
+  frontend-admin:
+    build:
+      context: ./frontend/admin
+      dockerfile: ../Dockerfile
+    command: npm run dev
+    volumes:
+      - ./frontend/admin:/app
+      - ./frontend/shared:/shared
+      - /app/node_modules
+      - /app/.next
+    environment:
+      NODE_ENV: development
+      NEXT_PUBLIC_API_URL: http://localhost/api/v1
+      NEXT_PUBLIC_GOOGLE_CLIENT_ID: ${NEXT_PUBLIC_GOOGLE_CLIENT_ID}
+      WATCHPACK_POLLING: "true"
+    restart: unless-stopped
+
+  frontend-superadmin:
+    build:
+      context: ./frontend/superadmin
+      dockerfile: ../Dockerfile
+    command: npm run dev
+    volumes:
+      - ./frontend/superadmin:/app
+      - ./frontend/shared:/shared
+      - /app/node_modules
+      - /app/.next
+    environment:
+      NODE_ENV: development
+      NEXT_PUBLIC_API_URL: http://localhost/api/v1
+      NEXT_PUBLIC_GOOGLE_CLIENT_ID: ${NEXT_PUBLIC_GOOGLE_CLIENT_ID}
+      WATCHPACK_POLLING: "true"
+    restart: unless-stopped
+
+  frontend-rider:
+    build:
+      context: ./frontend/rider
+      dockerfile: ../Dockerfile
+    command: npm run dev
+    volumes:
+      - ./frontend/rider:/app
+      - ./frontend/shared:/shared
+      - /app/node_modules
+      - /app/.next
+    environment:
+      NODE_ENV: development
+      NEXT_PUBLIC_API_URL: http://localhost/api/v1
+      NEXT_PUBLIC_GOOGLE_CLIENT_ID: ${NEXT_PUBLIC_GOOGLE_CLIENT_ID}
+      WATCHPACK_POLLING: "true"
+    restart: unless-stopped
