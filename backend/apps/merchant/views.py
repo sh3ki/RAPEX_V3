@@ -1,6 +1,4 @@
 """RAPEX Merchant Module — Views"""
-from django.core.files.storage import default_storage
-
 from rest_framework import generics, status
 from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.permissions import IsAuthenticated
@@ -8,6 +6,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.core.permissions import IsMerchant, IsKYCApproved
+from apps.core.storage import normalize_storage_path, resolve_storage_url
 
 from .models import MerchantStore
 from .serializers import (
@@ -22,6 +21,8 @@ from .serializers import (
     MerchantOnboardingLocationStepSerializer,
     MerchantOnboardingDocumentUploadSerializer,
     MerchantOnboardingProfileImageUploadSerializer,
+    MerchantStoreAssetUploadSerializer,
+    MerchantProductImageUploadSerializer,
     MerchantOnboardingDocumentsStepSerializer,
     MerchantOnboardingVerificationStepSerializer,
     MerchantOnboardingSendOtpSerializer,
@@ -51,25 +52,41 @@ class MerchantStoreListView(generics.ListAPIView):
         return MerchantStore.objects.filter(
             merchant=self.request.user.merchantprofile,
             is_deleted=False,
+        ).select_related(
+            'merchant__user',
+            'merchant__business_profile',
+        ).prefetch_related(
+            'merchant__business_profile__categories',
+            'merchant__business_profile__business_types',
         )
 
 
 class MerchantStoreCreateView(APIView):
     """POST /api/v1/merchant/stores/"""
     permission_classes = [IsAuthenticated, IsMerchant, IsKYCApproved]
+    parser_classes = [MultiPartParser, FormParser]
 
     def post(self, request):
         serializer = MerchantStoreCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
+        profile_image = data.pop('profile_image')
         store_type = data.pop('store_type')
         store = MerchantService.create_store(
             merchant=request.user.merchantprofile,
             store_type=store_type,
             data=data,
         )
+
+        MerchantService.upload_store_asset(
+            store=store,
+            upload_file=profile_image,
+            asset_type='logo',
+        )
+
+        store.refresh_from_db()
         return Response(
-            MerchantStoreSerializer(store).data,
+            MerchantStoreSerializer(store, context={'request': request}).data,
             status=status.HTTP_201_CREATED,
         )
 
@@ -83,6 +100,12 @@ class MerchantStoreDetailView(generics.RetrieveUpdateAPIView):
         return MerchantStore.objects.filter(
             merchant=self.request.user.merchantprofile,
             is_deleted=False,
+        ).select_related(
+            'merchant__user',
+            'merchant__business_profile',
+        ).prefetch_related(
+            'merchant__business_profile__categories',
+            'merchant__business_profile__business_types',
         )
 
 
@@ -108,6 +131,66 @@ class StoreCloseView(APIView):
         )
         MerchantService.toggle_open(store, False)
         return Response({'message': 'Store closed.'})
+
+
+class MerchantStoreAssetUploadView(APIView):
+    """POST /api/v1/merchant/stores/{id}/upload-asset/"""
+    permission_classes = [IsAuthenticated, IsMerchant, IsKYCApproved]
+    parser_classes = [MultiPartParser, FormParser]
+
+    def post(self, request, pk):
+        store = MerchantStore.objects.get(
+            pk=pk,
+            merchant=request.user.merchantprofile,
+            is_deleted=False,
+        )
+
+        serializer = MerchantStoreAssetUploadSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        stored_path = MerchantService.upload_store_asset(
+            store=store,
+            upload_file=serializer.validated_data['file'],
+            asset_type=serializer.validated_data['asset_type'],
+        )
+
+        return Response(
+            {
+                'asset_type': serializer.validated_data['asset_type'],
+                'file_url': resolve_storage_url(stored_path, request=request),
+                'storage_path': stored_path,
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class MerchantProductImageUploadView(APIView):
+    """POST /api/v1/merchant/stores/{id}/upload-product-image/"""
+    permission_classes = [IsAuthenticated, IsMerchant, IsKYCApproved]
+    parser_classes = [MultiPartParser, FormParser]
+
+    def post(self, request, pk):
+        store = MerchantStore.objects.get(
+            pk=pk,
+            merchant=request.user.merchantprofile,
+            is_deleted=False,
+        )
+
+        serializer = MerchantProductImageUploadSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        stored_path = MerchantService.upload_product_image(
+            store=store,
+            upload_file=serializer.validated_data['file'],
+        )
+
+        return Response(
+            {
+                'file_url': resolve_storage_url(stored_path, request=request),
+                'storage_path': stored_path,
+            },
+            status=status.HTTP_201_CREATED,
+        )
 
 
 # ── User-Facing ────────────────────────────────────
@@ -161,31 +244,22 @@ class MerchantOnboardingStateView(APIView):
         business_profile = MerchantBusinessProfile.objects.filter(merchant=merchant_profile).first()
         location = MerchantLocation.objects.filter(merchant=merchant_profile).first()
         documents = MerchantDocument.objects.filter(merchant=merchant_profile, is_deleted=False)
-        profile_image_url = request.user.profile_image_url or request.user.avatar_url
-        if profile_image_url and not profile_image_url.startswith('http://') and not profile_image_url.startswith('https://'):
-            resolved_profile_url = default_storage.url(profile_image_url)
-            if resolved_profile_url.startswith('/'):
-                resolved_profile_url = request.build_absolute_uri(resolved_profile_url)
-            profile_image_url = resolved_profile_url
+        profile_image_url = resolve_storage_url(request.user.profile_image_url or request.user.avatar_url, request=request)
 
-        document_payload = MerchantDocumentSerializer(documents, many=True).data
+        document_payload = MerchantDocumentSerializer(documents, many=True, context={'request': request}).data
         for item in document_payload:
-            stored_path = item.get('file_url')
+            stored_path = normalize_storage_path(item.get('file_url'))
             item['storage_path'] = stored_path
-            if not stored_path:
-                continue
-
-            if stored_path.startswith('http://') or stored_path.startswith('https://'):
-                continue
-
-            resolved_url = default_storage.url(stored_path)
-            if resolved_url.startswith('/'):
-                resolved_url = request.build_absolute_uri(resolved_url)
-            item['file_url'] = resolved_url
+            item['file_url'] = resolve_storage_url(stored_path, request=request)
 
         return Response(
             {
                 'state': MerchantOnboardingStateSerializer(state).data,
+                'account': {
+                    'status': request.user.status,
+                    'wizard_completed': request.user.wizard_completed,
+                    'kyc_status': merchant_profile.kyc_status,
+                },
                 'profile': {
                     'email': request.user.email,
                     'first_name': request.user.first_name,
@@ -259,10 +333,7 @@ class MerchantOnboardingDocumentUploadView(APIView):
             document_type=serializer.validated_data['document_type'],
             upload_file=serializer.validated_data['file'],
         )
-        file_url = default_storage.url(stored_path)
-
-        if file_url.startswith('/'):
-            file_url = request.build_absolute_uri(file_url)
+        file_url = resolve_storage_url(stored_path, request=request)
 
         return Response(
             {
@@ -286,9 +357,7 @@ class MerchantOnboardingProfileImageUploadView(APIView):
             merchant_profile=request.user.merchantprofile,
             upload_file=serializer.validated_data['file'],
         )
-        file_url = default_storage.url(stored_path)
-        if file_url.startswith('/'):
-            file_url = request.build_absolute_uri(file_url)
+        file_url = resolve_storage_url(stored_path, request=request)
 
         return Response(
             {
