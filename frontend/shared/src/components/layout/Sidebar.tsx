@@ -1,13 +1,16 @@
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
 import { ChevronLeft, ChevronRight, LogOut, type LucideIcon } from 'lucide-react';
+import { ConfirmationModal } from '../ui/ConfirmationModal';
 import { cn } from '../../utils/cn';
 
 export interface SidebarItem {
   href: string;
   label: string;
   icon: LucideIcon;
+  badgeCount?: number;
 }
 
 export interface SidebarSection {
@@ -40,94 +43,127 @@ export function Sidebar({
   userInitial = 'R',
   onLogout,
 }: SidebarProps) {
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+
+  const handleLogoutClick = () => {
+    setShowLogoutConfirm(true);
+  };
+
+  const handleLogoutConfirm = () => {
+    setShowLogoutConfirm(false);
+    onLogout();
+  };
+
   return (
-    <aside
-      className={cn(
-        'fixed left-0 top-0 z-40 hidden h-screen border-r border-gray-200 bg-white lg:flex lg:flex-col',
-        'transition-all duration-300',
-        collapsed ? 'w-[70px]' : 'w-[260px]',
-      )}
-    >
-      <div className="relative flex items-center gap-3 border-b border-gray-100 px-5 py-5">
-        <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-primary-500 text-lg font-bold text-white">R</div>
+    <>
+      <aside
+        className={cn(
+          'fixed left-0 top-0 z-40 hidden h-screen border-r border-gray-200 bg-white lg:flex lg:flex-col',
+          'transition-all duration-300',
+          collapsed ? 'w-[70px]' : 'w-[260px]',
+        )}
+      >
+        <div className="relative flex items-center gap-3 border-b border-gray-100 px-5 py-5">
+          <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-primary-500 text-lg font-bold text-white">R</div>
 
-        {!collapsed ? (
-          <div className="overflow-hidden">
-            <span className="text-lg font-bold text-gray-900">{brandLabel}</span>
-            {roleLabel ? <span className="block text-[11px] font-medium tracking-wide text-gray-400">{roleLabel}</span> : null}
-          </div>
-        ) : null}
-
-        <button
-          type="button"
-          onClick={() => onCollapsedChange(!collapsed)}
-          className="absolute -right-3 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-400 shadow-sm transition-colors hover:text-gray-600"
-          aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-        >
-          {collapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
-        </button>
-      </div>
-
-      <nav className="flex-1 overflow-y-auto px-3 py-4">
-        {sections.map((section) => (
-          <div key={section.title} className="mb-5">
-            {!collapsed ? (
-              <p className="mb-2 px-3 text-[11px] font-semibold uppercase tracking-wider text-gray-400">{section.title}</p>
-            ) : null}
-            <div className="space-y-0.5">
-              {section.items.map(({ href, label, icon: Icon }) => {
-                const active = activePath === href || activePath.startsWith(`${href}/`);
-                return (
-                  <Link
-                    key={href}
-                    href={href}
-                    title={collapsed ? label : undefined}
-                    className={cn(
-                      'flex items-center gap-3 rounded-lg px-3 py-2.5 text-[13px] font-medium transition-all',
-                      active ? 'bg-primary-50 text-primary-600' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900',
-                      collapsed ? 'justify-center' : '',
-                    )}
-                  >
-                    <Icon size={18} className="flex-shrink-0" />
-                    {!collapsed ? <span className="truncate">{label}</span> : null}
-                  </Link>
-                );
-              })}
+          {!collapsed ? (
+            <div className="overflow-hidden">
+              <span className="text-lg font-bold text-gray-900">{brandLabel}</span>
+              {roleLabel ? <span className="block text-[11px] font-medium tracking-wide text-gray-400">{roleLabel}</span> : null}
             </div>
-          </div>
-        ))}
-      </nav>
+          ) : null}
 
-      <div className="border-t border-gray-100 p-3">
-        {collapsed ? (
           <button
             type="button"
-            onClick={onLogout}
-            title="Logout"
-            className="flex w-full items-center justify-center rounded-lg p-2.5 text-gray-400 transition-colors hover:bg-red-50 hover:text-red-500"
+            onClick={() => onCollapsedChange(!collapsed)}
+            className="absolute -right-3 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-400 shadow-sm transition-colors hover:text-gray-600"
+            aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           >
-            <LogOut size={18} />
+            {collapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
           </button>
-        ) : (
-          <div className="flex items-center gap-3 px-2 py-2">
-            <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-primary-100 text-sm font-bold text-primary-600">
-              {userInitial}
+        </div>
+
+        <nav className="flex-1 overflow-y-auto px-3 py-4">
+          {sections.map((section) => (
+            <div key={section.title} className="mb-5">
+              {!collapsed ? (
+                <p className="mb-2 px-3 text-[11px] font-semibold uppercase tracking-wider text-gray-400">{section.title}</p>
+              ) : null}
+              <div className="space-y-0.5">
+                {section.items.map(({ href, label, icon: Icon, badgeCount }) => {
+                  const active = activePath === href || activePath.startsWith(`${href}/`);
+                  const hasBadge = typeof badgeCount === 'number' && badgeCount > 0;
+                  return (
+                    <Link
+                      key={href}
+                      href={href}
+                      title={collapsed ? label : undefined}
+                      className={cn(
+                        'flex items-center gap-3 rounded-lg px-3 py-2.5 text-[13px] font-medium transition-all',
+                        active ? 'bg-primary-50 text-primary-600' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900',
+                        collapsed ? 'justify-center' : '',
+                      )}
+                    >
+                      <span className="relative">
+                        <Icon size={18} className="flex-shrink-0" />
+                        {collapsed && hasBadge ? (
+                          <span className="absolute -right-2 -top-1 h-2 w-2 rounded-full bg-red-500" />
+                        ) : null}
+                      </span>
+                      {!collapsed ? <span className="truncate">{label}</span> : null}
+                      {!collapsed && hasBadge ? (
+                        <span className="ml-auto inline-flex min-w-[22px] items-center justify-center rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-semibold text-white">
+                          {badgeCount}
+                        </span>
+                      ) : null}
+                    </Link>
+                  );
+                })}
+              </div>
             </div>
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-semibold text-gray-900">{userName || 'User'}</p>
-              <p className="text-[11px] text-gray-400">{userMeta || roleLabel || 'Role'}</p>
-            </div>
+          ))}
+        </nav>
+
+        <div className="border-t border-gray-100 p-3">
+          {collapsed ? (
             <button
               type="button"
-              onClick={onLogout}
+              onClick={handleLogoutClick}
               title="Logout"
-              className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-red-50 hover:text-red-500"
+              className="flex w-full items-center justify-center rounded-lg p-2.5 text-gray-400 transition-colors hover:bg-red-50 hover:text-red-500"
             >
-              <LogOut size={16} />
+              <LogOut size={18} />
             </button>
-          </div>
-        )}
-      </div>
-    </aside>
+          ) : (
+            <div className="flex items-center gap-3 px-2 py-2">
+              <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-primary-100 text-sm font-bold text-primary-600">
+                {userInitial}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-semibold text-gray-900">{userName || 'User'}</p>
+                <p className="text-[11px] text-gray-400">{userMeta || roleLabel || 'Role'}</p>
+              </div>
+              <button
+                type="button"
+                onClick={handleLogoutClick}
+                title="Logout"
+                className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-red-50 hover:text-red-500"
+              >
+                <LogOut size={16} />
+              </button>
+            </div>
+          )}
+        </div>
+      </aside>
+
+      <ConfirmationModal
+        open={showLogoutConfirm}
+        title="Logout"
+        description="Are you sure you want to logout?"
+        confirmLabel="Logout"
+        onCancel={() => setShowLogoutConfirm(false)}
+        onConfirm={handleLogoutConfirm}
+      />
+    </>
   );
 }
